@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SoundTrack — Gestión de Equipos de Audio</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root {
+  --bg:#0f0f11; --bg2:#18181c; --bg3:#222228;
+  --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.14);
+  --text:#f0f0f0; --text2:#a0a0b0; --text3:#6a6a7a;
+  --accent:#7c6af7; --green:#22c87a; --red:#f04a4a; --amber:#f0a020;
+  --radius:10px; --radius-lg:14px; --shadow:0 4px 24px rgba(0,0,0,.5);
+  --sidebar-w:220px; --nav-h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit}
+input[type=date]::-webkit-calendar-picker-indicator,
+input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.5}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* Leaflet */
+.leaflet-container{background:#1a1a22!important}
+.leaflet-tile-pane{filter:brightness(.85) saturate(.7)}
+.st-popup .leaflet-popup-content-wrapper{background:#18181c;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#f0f0f0;box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.st-popup .leaflet-popup-tip{background:#18181c}
+.st-popup .leaflet-popup-content{margin:12px 14px;font-family:system-ui,sans-serif}
+.leaflet-control-zoom a{background:#18181c!important;color:#f0f0f0!important;border-color:rgba(255,255,255,.12)!important}
+.leaflet-control-zoom a:hover{background:#222228!important}
+.leaflet-control-attribution{background:rgba(15,15,18,.7)!important;color:#6a6a7a!important}
+.leaflet-control-attribution a{color:#a0a0b0!important}
+
+/* Layout */
+.app-layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .2s}
+.content-area{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.bottom-nav{display:none}
+
+/* Header */
+.view-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-shrink:0;position:sticky;top:0;z-index:10}
+.view-header h2{font-size:1rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Map */
+.map-outer{display:flex;flex-direction:column;height:calc(100vh - 57px)}
+.map-body{display:flex;flex:1;overflow:hidden;min-height:0}
+.map-container{flex:1;height:100%}
+.map-panel{width:290px;background:var(--bg2);border-left:1px solid var(--border);overflow-y:auto;padding:.85rem;flex-shrink:0}
+.map-panel-toggle{display:none}
+
+/* Table */
+.table-wrap{overflow-x:auto;padding:0 1.25rem 1.5rem}
+table{width:100%;border-collapse:collapse;font-size:.87rem}
+th{text-align:left;padding:.7rem .5rem;color:var(--text2);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.mobile-cards{display:none;padding:.75rem}
+
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.65rem;padding:1rem 1.25rem}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:200;padding:1rem}
+.modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.4rem;width:480px;max-width:100%;max-height:88vh;overflow-y:auto}
+.modal-box.wide{width:560px}
+.modal-box.sm{width:420px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:.85rem}
+.form-field{margin-bottom:.85rem}
+.form-field label{display:block;font-size:.8rem;color:var(--text2);margin-bottom:.3rem}
+.form-field input,.form-field select,.form-field textarea{width:100%;padding:.6rem .8rem;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:.9rem}
+.form-field textarea{resize:vertical}
+.modal-footer{display:flex;gap:.65rem;justify-content:flex-end;margin-top:1.1rem;flex-wrap:wrap}
+.btn{padding:.45rem 1rem;border-radius:8px;font-size:.85rem;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.badge{display:inline-flex;align-items:center;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500}
+
+/* Autocomplete */
+.ac-dropdown{position:absolute;top:calc(100% - .85rem);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:0 0 var(--radius) var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.55);max-height:200px;overflow-y:auto;z-index:9999}
+.ac-row{padding:.6rem .85rem;cursor:pointer;font-size:.83rem;border-bottom:1px solid var(--border);color:var(--text);line-height:1.35}
+.ac-row:last-child{border-bottom:none}
+.ac-row:hover{background:var(--bg3)}
+/* Allow modal to overflow for dropdown */
+.modal-box.sm.with-ac{overflow:visible;max-height:none}
+
+/* Dispatch & location cards */
+.dispatch-list{padding:1.1rem 1.5rem;display:flex;flex-direction:column;gap:.75rem}
+.dispatch-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem}
+.dispatch-actions{display:flex;gap:.45rem;margin-top:.65rem;flex-wrap:wrap}
+.loc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.85rem;padding:1.1rem 1.5rem}
+.loc-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem;position:relative;overflow:hidden}
+
+/* Nav items */
+.nav-item{padding:.6rem .9rem;display:flex;align-items:center;gap:.55rem;cursor:pointer;border-radius:8px;margin:0 .4rem;font-size:.87rem;color:var(--text2);transition:background .15s,color .15s;user-select:none}
+.nav-item.active{color:var(--text);background:var(--bg3);font-weight:500}
+.nav-item:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
+.nav-label{overflow:hidden;white-space:nowrap}
+
+/* ── TABLET (≤880px) ─────────────────────── */
+@media(max-width:880px){
+  :root{--sidebar-w:58px}
+  .sidebar-logo-full,.nav-label,.sidebar-user-name,.sidebar-role,.sidebar-logout-full{display:none!important}
+  .sidebar-logo-icon{display:block!important}
+  .nav-item{justify-content:center;padding:.6rem;margin:0 .2rem}
+  .sidebar-user{padding:.5rem;justify-content:center}
+  .sidebar-logout-icon{display:block!important}
+  .map-panel{width:250px}
+}
+
+/* ── MOBILE (≤640px) ─────────────────────── */
+@media(max-width:640px){
+  html,body{overflow:hidden;height:100%}
+  .app-layout{flex-direction:column;height:100dvh;overflow:hidden}
+  .sidebar{display:none}
+  .content-area{overflow:hidden;flex:1;display:flex;flex-direction:column;padding-bottom:0}
+
+  /* Bottom nav */
+  .bottom-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    height:var(--nav-h);background:var(--bg2);border-top:1px solid var(--border);
+    z-index:100;padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:.62rem;color:var(--text3);border:none;background:transparent;cursor:pointer;padding:.35rem 0;-webkit-tap-highlight-color:transparent}
+  .bnav-btn.active{color:var(--accent)}
+  .bnav-icon{font-size:1.3rem;line-height:1}
+
+  /* Map - mobile: ocupa todo el espacio entre header y bottom nav */
+  .map-outer{
+    height:calc(100dvh - 57px - var(--nav-h) - env(safe-area-inset-bottom,0px));
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .map-body{
+    flex-direction:column;
+    flex:1;
+    overflow:hidden;
+    min-height:0;
+  }
+  .map-container{
+    flex:0 0 50%;
+    height:auto;
+    min-height:0;
+    max-height:none;
+    transition:flex .25s ease;
+  }
+  .map-container.expanded{
+    flex:1 1 100%;
+  }
+  .map-panel{
+    width:100%;
+    border-left:none;
+    border-top:1px solid var(--border);
+    flex:0 0 auto;
+    max-height:45%;
+    overflow-y:auto;
+    transition:max-height .25s ease, opacity .2s ease;
+  }
+  .map-panel.hidden{
+    max-height:0;
+    overflow:hidden;
+    opacity:0;
+    border-top:none;
+  }
+  .map-panel-toggle{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:.6rem .85rem;font-size:.83rem;font-weight:500;
+    background:var(--bg3);border-bottom:1px solid var(--border);
+    cursor:pointer;user-select:none;flex-shrink:0;
+  }
+  .map-expanded-spacer{display:none}
+
+  /* Equipment */
+  .table-wrap{display:none}
+  .mobile-cards{display:block}
+  .stat-grid{grid-template-columns:repeat(3,1fr);gap:.5rem;padding:.75rem}
+
+  /* View header */
+  .view-header{padding:.75rem .9rem}
+  .view-header h2{font-size:.9rem}
+
+  /* Modals – bottom sheet */
+  .modal-overlay{align-items:flex-end;padding:0}
+  .modal-box,.modal-box.wide,.modal-box.sm{
+    width:100%;max-width:100%;border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    max-height:91dvh;padding:1rem .9rem 1.4rem;
+  }
+  .modal-box.with-ac{overflow:visible;max-height:none}
+  .form-grid-2{grid-template-columns:1fr}
+  .modal-footer{flex-direction:column-reverse}
+  .modal-footer .btn{width:100%;text-align:center;padding:.7rem}
+
+  /* Lists */
+  .dispatch-list{padding:.75rem}
+  .loc-grid{grid-template-columns:1fr;padding:.75rem}
+  /* Non-map views need scroll inside fixed container */
+  equipment-view, dispatches-view, locations-view{
+    display:block;
+    height:calc(100dvh - 57px - var(--nav-h) - env(safe-area-inset-bottom,0px));
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+}
+</style>
+</head>
+<body>
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const App = {
+  user:null, view:'login',
+  data:{
+    users:[
+      {id:1,name:'Carlos Medina', username:'admin',  password:'admin123',  role:'admin'},
+      {id:2,name:'Laura Ríos',    username:'viewer', password:'viewer123', role:'viewer'}
+    ],
+    locations:[
+      {id:1,name:'Depósito Central',type:'deposito',address:'Av. Corrientes 1234, CABA',      lat:-34.6041,  lng:-58.3934,  color:'#7c6af7'},
+      {id:2,name:'Teatro Gran Rex', type:'show',     address:'Av. Corrientes 857, CABA',       lat:-34.60322, lng:-58.37895, color:'#22c87a'},
+      {id:3,name:'Estadio Vélez',   type:'show',     address:'Av. Juan B. Justo 9200, Liniers',lat:-34.63535, lng:-58.52069, color:'#22c87a'},
+      {id:4,name:'Luna Park',       type:'show',     address:'Av. Eduardo Madero 470, CABA',   lat:-34.60232, lng:-58.36870, color:'#22c87a'}
+    ],
+    categories:['Parlantes','Amplificadores','Micrófonos','Pies de micrófono','Equipos inalámbricos','Antenas de RF'],
+    equipment:[
+      {id:1, name:'JBL VTX A12',          category:'Parlantes',            quantity:12,model:'VTX A12'},
+      {id:2, name:'QSC KLA12',             category:'Parlantes',            quantity:8, model:'KLA12'},
+      {id:3, name:'Crown IT4x3500HD',      category:'Amplificadores',       quantity:6, model:'IT4x3500HD'},
+      {id:4, name:'Lab Gruppen FP 10000Q', category:'Amplificadores',       quantity:4, model:'FP 10000Q'},
+      {id:5, name:'Shure SM58',            category:'Micrófonos',           quantity:20,model:'SM58'},
+      {id:6, name:'Sennheiser e945',       category:'Micrófonos',           quantity:10,model:'e945'},
+      {id:7, name:'K&M 210/2',             category:'Pies de micrófono',    quantity:30,model:'210/2'},
+      {id:8, name:'Shure ULXD4Q',          category:'Equipos inalámbricos', quantity:4, model:'ULXD4Q'},
+      {id:9, name:'Sennheiser EW-D',       category:'Equipos inalámbricos', quantity:6, model:'EW-D'},
+      {id:10,name:'Wisycom MCR42S',        category:'Antenas de RF',        quantity:4, model:'MCR42S'}
+    ],
+    dispatches:[
+      {id:1,origin:1,destination:2,items:[{equipId:1,qty:6},{equipId:3,qty:2}],
+       generatedBy:'Carlos Medina',driver:'Mario González',
+       dateStart:'2025-05-10T08:00',dateEnd:'2025-05-12T22:00',notes:'Show Divididos - Teatro Gran Rex'}
+    ]
+  },
+  nextId:{location:10,equipment:20,dispatch:10},
+  listeners:[],
+  on(fn){this.listeners.push(fn)},
+  emit(){this.listeners.forEach(fn=>fn())},
+  navigate(v){this.view=v;this.emit()},
+  login(u,p){const x=this.data.users.find(u2=>u2.username===u&&u2.password===p);if(x){this.user=x;this.navigate('map');return true}return false},
+  logout(){this.user=null;this.navigate('login')},
+  isAdmin(){return this.user?.role==='admin'}
+};
+
+// ─── UTILS ──────────────────────────────────────────────────────────────────
+function el(tag,attrs={},children=[]){
+  const e=document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>{
+    if(k==='class') e.className=v;
+    else if(k==='style'&&typeof v==='object') Object.assign(e.style,v);
+    else if(k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(),v);
+    else e.setAttribute(k,v);
+  });
+  children.forEach(c=>{if(c!=null)e.append(typeof c==='string'?document.createTextNode(c):c)});
+  return e;
+}
+const fmt=d=>{
+  if(!d) return '-';
+  // datetime-local values have 'T', plain dates don't
+  if(d.includes('T')){
+    const dt=new Date(d);
+    return dt.toLocaleDateString('es-AR')+' '+dt.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  }
+  return new Date(d+'T00:00').toLocaleDateString('es-AR');
+};
+const catColor=c=>({'Parlantes':'#7c6af7','Amplificadores':'#22c87a','Micrófonos':'#f0a020','Pies de micrófono':'#1db88a','Equipos inalámbricos':'#f04a4a','Antenas de RF':'#3bc0f7'})[c]||'#888';
+const badge=(t,c)=>el('span',{class:'badge',style:{background:c+'22',color:c,border:`1px solid ${c}44`}},[t]);
+const today=()=>new Date().toISOString().slice(0,16); // "YYYY-MM-DDTHH:MM" — matches datetime-local format
+const isMobile=()=>window.innerWidth<=640;
+
+function ffInput(label,id,type,value,extra={}){
+  const w=el('div',{class:'form-field'});
+  w.append(el('label',{for:id},[label]));
+  const attrs=Object.assign({id,type,style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}},extra);
+  if(value!==undefined&&value!==null) attrs.value=String(value);
+  w.append(el('input',attrs)); return w;
+}
+function ffSelect(label,id,options,selected){
+  const w=el('div',{class:'form-field'});
+  w.append(el('label',{for:id},[label]));
+  const s=el('select',{id,style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+  options.forEach(o=>{const op=el('option',{value:o.v},[o.l]);if(String(o.v)===String(selected))op.selected=true;s.append(op)});
+  w.append(s); return w;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// WEB COMPONENTS
+// ════════════════════════════════════════════════════════════════════════════
+
+class AppRoot extends HTMLElement {
+  connectedCallback(){this.render();App.on(()=>this.render())}
+  render(){this.innerHTML='';this.append(document.createElement(App.view==='login'?'login-screen':'app-shell'))}
+}
+customElements.define('app-root',AppRoot);
+
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+class LoginScreen extends HTMLElement {
+  connectedCallback(){
+    this.style.cssText='display:flex;align-items:center;justify-content:center;min-height:100svh;padding:1.25rem;background:var(--bg)';
+    const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:'360px',boxShadow:'var(--shadow)'}});
+    const logo=el('div',{style:{textAlign:'center',marginBottom:'1.75rem'}});
+    logo.innerHTML=`<div style="font-size:2.2rem;margin-bottom:.45rem">🔊</div><h1 style="font-size:1.45rem;font-weight:700">SoundTrack</h1><p style="color:var(--text2);font-size:.83rem;margin-top:.3rem">Gestión de Equipos de Audio</p>`;
+    const err=el('p',{style:{color:'var(--red)',fontSize:'.83rem',marginBottom:'.75rem',display:'none'}},['Usuario o contraseña incorrectos']);
+    const userIn=el('input',{type:'text',placeholder:'Usuario',style:{width:'100%',padding:'.75rem 1rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',marginBottom:'.65rem',display:'block',fontSize:'1rem'}});
+    const passWrap=el('div',{style:{position:'relative',marginBottom:'1.1rem'}});
+    const passIn=el('input',{type:'password',placeholder:'Contraseña',style:{width:'100%',padding:'.75rem 3rem .75rem 1rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',display:'block',fontSize:'1rem'}});
+    const eyeBtn=el('button',{style:{position:'absolute',right:0,top:0,height:'100%',width:'2.75rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:`0 var(--radius) var(--radius) 0`}});
+    const eyeOpen=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    const eyeClose=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`;
+    eyeBtn.innerHTML=eyeOpen; let vis=false;
+    eyeBtn.onclick=()=>{vis=!vis;passIn.type=vis?'text':'password';eyeBtn.innerHTML=vis?eyeClose:eyeOpen;eyeBtn.style.color=vis?'var(--accent)':'var(--text3)'};
+    passWrap.append(passIn,eyeBtn);
+    const loginBtn=el('button',{style:{width:'100%',padding:'.85rem',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius)',fontWeight:'600',fontSize:'1rem'}},['Ingresar']);
+    const go=()=>{if(!App.login(userIn.value.trim(),passIn.value)){err.style.display='block';userIn.focus()}};
+    loginBtn.onclick=go; passIn.addEventListener('keydown',e=>{if(e.key==='Enter')go()});
+    const hint=el('p',{style:{marginTop:'1.1rem',color:'var(--text3)',fontSize:'.73rem',textAlign:'center'}},['admin / admin123  ·  viewer / viewer123']);
+    card.append(logo,err,userIn,passWrap,loginBtn,hint); this.append(card);
+  }
+}
+customElements.define('login-screen',LoginScreen);
+
+// ─── APP SHELL ───────────────────────────────────────────────────────────────
+class AppShell extends HTMLElement {
+  connectedCallback(){this.style.cssText='display:contents';this.render();App.on(()=>this.update())}
+  get items(){
+    const a=[{id:'map',icon:'🗺️',label:'Mapa'},{id:'equipment',icon:'🔧',label:'Equipos'},{id:'dispatches',icon:'📦',label:'Despachos'}];
+    if(App.isAdmin()) a.push({id:'locations',icon:'📍',label:'Lugares'});
+    return a;
+  }
+  render(){
+    this.innerHTML='';
+    // Sidebar
+    const sb=el('div',{class:'sidebar'});
+    const logoArea=el('div',{style:{padding:'1rem .85rem',borderBottom:'1px solid var(--border)',flexShrink:'0'}});
+    const lf=el('div',{class:'sidebar-logo-full',style:{fontSize:'1rem',fontWeight:'700'}},['🔊 SoundTrack']);
+    const li=el('div',{class:'sidebar-logo-icon',style:{fontSize:'1.4rem',textAlign:'center',display:'none'}},['🔊']);
+    logoArea.append(lf,li);
+    const nav=el('nav',{style:{padding:'.5rem 0',flex:'1',overflowY:'auto'}});
+    this.items.forEach(v=>{
+      const item=el('div',{class:'nav-item'+(App.view===v.id?' active':'')},['  '+v.icon+'  ',el('span',{class:'nav-label'},[' '+v.label])]);
+      item.onclick=()=>App.navigate(v.id); nav.append(item);
+    });
+    this._nav=nav;
+    const ua=el('div',{class:'sidebar-user',style:{padding:'.75rem',borderTop:'1px solid var(--border)',flexShrink:'0'}});
+    const uname=el('div',{class:'sidebar-user-name',style:{fontWeight:'500',fontSize:'.85rem',marginBottom:'.3rem'}},[App.user?.name||'']);
+    const rb=badge(App.isAdmin()?'Admin':'Viewer',App.isAdmin()?'#7c6af7':'#22c87a'); rb.className+=' sidebar-role';
+    const lbf=el('button',{class:'btn sidebar-logout-full',style:{marginTop:'.45rem',fontSize:'.76rem',padding:'.3rem .65rem'}},['Cerrar sesión']); lbf.onclick=()=>App.logout();
+    const lbi=el('button',{style:{display:'none',background:'transparent',border:'none',color:'var(--text3)',fontSize:'1.2rem',cursor:'pointer',width:'100%',textAlign:'center',marginTop:'.15rem',lineHeight:'1'},class:'sidebar-logout-icon',title:'Cerrar sesión'},['↩']); lbi.onclick=()=>App.logout();
+    ua.append(uname,rb,el('br'),lbf,lbi); sb.append(logoArea,nav,ua);
+
+    // Content
+    this.contentEl=el('div',{class:'content-area'}); this._renderView();
+
+    // Bottom nav
+    const bnav=el('div',{class:'bottom-nav'});
+    this.items.forEach(v=>{
+      const btn=el('button',{class:'bnav-btn'+(App.view===v.id?' active':'')});
+      btn.innerHTML=`<span class="bnav-icon">${v.icon}</span><span>${v.label}</span>`;
+      btn.onclick=()=>App.navigate(v.id); bnav.append(btn);
+    });
+    this._bnav=bnav;
+
+    const layout=el('div',{class:'app-layout'}); layout.append(sb,this.contentEl);
+    this.append(layout,bnav);
+  }
+  update(){
+    if(!this._nav) return;
+    this._nav.querySelectorAll('.nav-item').forEach((item,i)=>{item.className='nav-item'+(App.view===this.items[i]?.id?' active':'')});
+    if(this._bnav) this._bnav.querySelectorAll('.bnav-btn').forEach((btn,i)=>{btn.className='bnav-btn'+(App.view===this.items[i]?.id?' active':'')});
+    this._renderView();
+  }
+  _renderView(){
+    if(!this.contentEl) return;
+    this.contentEl.innerHTML='';
+    const tags={map:'map-view',equipment:'equipment-view',dispatches:'dispatches-view',locations:'locations-view'};
+    this.contentEl.append(document.createElement(tags[App.view]||'map-view'));
+  }
+}
+customElements.define('app-shell',AppShell);
+
+// ─── MAP VIEW ────────────────────────────────────────────────────────────────
+class MapView extends HTMLElement {
+  connectedCallback(){this.render()}
+  render(){
+    this.innerHTML='';
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>🗺️ Mapa de Ubicaciones</h2>`;
+    const legend=el('div',{style:{display:'flex',gap:'.65rem',fontSize:'.76rem',alignItems:'center',flexShrink:'0'}});
+    legend.append(
+      el('span',{style:{display:'flex',alignItems:'center',gap:'.3rem',color:'var(--text2)'}},[el('span',{style:{width:'9px',height:'9px',borderRadius:'50%',background:'#7c6af7',display:'inline-block'}},[]),'Dep.']),
+      el('span',{style:{display:'flex',alignItems:'center',gap:'.3rem',color:'var(--text2)'}},[el('span',{style:{width:'9px',height:'9px',borderRadius:'50%',background:'#22c87a',display:'inline-block'}},[]),'Show'])
+    );
+    header.append(legend);
+
+    const outer=el('div',{class:'map-outer'});
+    const body=el('div',{class:'map-body'});
+    const mapDiv=el('div',{id:'leaflet-map',class:'map-container'});
+
+    // Mobile toggle
+    let panelOpen=true;
+    const toggle=el('div',{class:'map-panel-toggle'});
+    toggle.innerHTML=`<span>📍 Puntos (${App.data.locations.length})</span><span id="ptarr">▼</span>`;
+    const spacer=el('div',{class:'map-expanded-spacer'});
+    toggle.onclick=()=>{
+      panelOpen=!panelOpen;
+      toggle.querySelector('#ptarr').textContent=panelOpen?'▼':'▶';
+      if(window.innerWidth<=640){
+        if(!panelOpen){
+          panel.classList.add('hidden');
+          mapDiv.classList.add('expanded');
+        } else {
+          panel.classList.remove('hidden');
+          mapDiv.classList.remove('expanded');
+        }
+        setTimeout(()=>{ if(this._map) this._map.invalidateSize() },280);
+      }
+    };
+
+    const panel=el('div',{class:'map-panel'});
+    panel.innerHTML=`<h3 style="font-size:.78rem;font-weight:600;margin-bottom:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Puntos registrados</h3>`;
+    App.data.locations.forEach(loc=>{
+      const card=el('div',{style:{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'.65rem',marginBottom:'.45rem',cursor:'pointer'}});
+      card.onmouseenter=()=>card.style.borderColor='rgba(255,255,255,.2)';
+      card.onmouseleave=()=>card.style.borderColor='rgba(255,255,255,.08)';
+      const top=el('div',{style:{display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'.2rem'}});
+      top.append(el('span',{style:{width:'8px',height:'8px',borderRadius:'50%',background:loc.color,display:'inline-block',flexShrink:'0'}},[]),el('span',{style:{fontWeight:'500',fontSize:'.85rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[loc.name]));
+      const addr=el('p',{style:{color:'var(--text2)',fontSize:'.75rem',marginBottom:'.3rem'}},[loc.address]);
+      const eq=el('div',{style:{fontSize:'.72rem',color:'var(--text3)'}},[this.getEquipText(loc.id)]);
+      card.append(top,addr,eq);
+      card.onclick=()=>{if(this._map&&this._markers?.[loc.id]){this._map.setView([loc.lat,loc.lng],15,{animate:true});this._markers[loc.id].openPopup()}};
+      panel.append(card);
+    });
+
+    body.append(mapDiv,panel);
+    outer.append(toggle,body,spacer);
+    this.append(header,outer);
+    requestAnimationFrame(()=>this.initMap());
+  }
+  getEquipText(id){
+    const t=today(),a=App.data.dispatches.filter(d=>d.destination===id&&d.dateEnd>=t);
+    return a.length?`${a.flatMap(d=>d.items).length} ítem(s) activos`:'Sin equipos activos';
+  }
+  initMap(){
+    if(!window.L){setTimeout(()=>this.initMap(),100);return}
+    const c=this.querySelector('#leaflet-map');
+    if(!c||c.offsetWidth===0){setTimeout(()=>this.initMap(),100);return}
+    const locs=App.data.locations;
+    const map=L.map(c,{zoomControl:true}).setView([locs.reduce((s,l)=>s+l.lat,0)/locs.length,locs.reduce((s,l)=>s+l.lng,0)/locs.length],12);
+    this._map=map; this._markers={};
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | © <a href="https://carto.com/">CARTO</a>',subdomains:'abcd',maxZoom:19}).addTo(map);
+    App.data.dispatches.forEach(d=>{
+      const from=locs.find(l=>l.id===d.origin),to=locs.find(l=>l.id===d.destination);
+      if(!from||!to) return;
+      L.polyline([[from.lat,from.lng],[to.lat,to.lng]],{color:d.dateEnd>=today()?'#7c6af7':'#444',weight:2.5,opacity:.65,dashArray:'8,6'}).addTo(map);
+    });
+    locs.forEach(loc=>{
+      const icon=L.divIcon({className:'',html:`<div style="width:32px;height:32px;border-radius:50%;background:${loc.color}33;border:2.5px solid ${loc.color};display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px ${loc.color}55"><div style="width:10px;height:10px;border-radius:50%;background:${loc.color}"></div></div>`,iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-18]});
+      const t=today(),active=App.data.dispatches.filter(d=>d.destination===loc.id&&d.dateEnd>=t);
+      const eqH=active.length?active.map(d=>d.items.map(it=>{const eq=App.data.equipment.find(e=>e.id===it.equipId);return`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="font-size:12px">${eq?.name||'?'}</span><span style="font-size:12px;color:${loc.color};font-weight:600;margin-left:8px">${it.qty}×</span></div>`}).join('')).join(''):`<p style="color:#6a6a7a;font-size:12px;margin-top:4px">Sin equipos activos</p>`;
+      const popup=`<div style="min-width:175px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:9px;height:9px;border-radius:50%;background:${loc.color};display:inline-block;flex-shrink:0"></span><strong style="font-size:13px">${loc.name}</strong></div><p style="color:#a0a0b0;font-size:12px;margin-bottom:7px">${loc.address}</p><div style="font-size:10px;color:#6a6a7a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Equipos activos</div>${eqH}</div>`;
+      const marker=L.marker([loc.lat,loc.lng],{icon}).addTo(map).bindPopup(popup,{className:'st-popup',maxWidth:250});
+      marker.on('click',()=>this.showDetail(loc)); this._markers[loc.id]=marker;
+    });
+    if(locs.length>1) map.fitBounds(L.latLngBounds(locs.map(l=>[l.lat,l.lng])),{padding:[40,40]});
+  }
+  showDetail(loc){const m=document.createElement('map-detail-modal');m.loc=loc;this.append(m)}
+}
+customElements.define('map-view',MapView);
+
+class MapDetailModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const loc=this.loc;
+    const box=el('div',{class:'modal-box sm'});
+    const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}});
+    const ttl=el('div',{style:{display:'flex',alignItems:'center',gap:'.5rem'}});
+    ttl.append(el('span',{style:{width:'11px',height:'11px',borderRadius:'50%',background:loc.color,display:'inline-block'}},[]),el('h3',{style:{fontSize:'.98rem',fontWeight:'600'}},[loc.name]));
+    const cls=el('button',{style:{background:'transparent',border:'none',color:'var(--text2)',fontSize:'1.3rem',padding:'.1rem .3rem',lineHeight:'1'}},['×']);cls.onclick=()=>this.remove();
+    top.append(ttl,cls);
+    box.append(top,el('p',{style:{color:'var(--text2)',fontSize:'.83rem',marginBottom:'.65rem'}},[loc.address]),badge(loc.type==='deposito'?'Depósito':'Lugar de show',loc.color));
+    const t=today(),active=App.data.dispatches.filter(d=>d.destination===loc.id&&d.dateEnd>=t);
+    box.append(el('h4',{style:{marginTop:'.9rem',marginBottom:'.45rem',fontSize:'.76rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em'}},['Equipos activos aquí']));
+    if(!active.length) box.append(el('p',{style:{color:'var(--text3)',fontSize:'.83rem'}},['Sin despachos activos']));
+    active.forEach(d=>{
+      const r=el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.6rem',marginBottom:'.35rem',border:'1px solid var(--border)'}});
+      r.innerHTML=`<div style="font-weight:500;font-size:.83rem;margin-bottom:.2rem">${d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(', ')}</div><div style="font-size:.76rem;color:var(--text2)">Conductor: ${d.driver} · Hasta ${fmt(d.dateEnd)}</div>`;
+      box.append(r);
+    });
+    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+  }
+}
+customElements.define('map-detail-modal',MapDetailModal);
+
+// ─── EQUIPMENT VIEW ──────────────────────────────────────────────────────────
+class EquipmentView extends HTMLElement {
+  connectedCallback(){this.filterCat='all';this.render()}
+  render(){
+    this.innerHTML='';
+    const isAdmin=App.isAdmin();
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>🔧 Inventario de Equipos</h2>`;
+    if(isAdmin){const b=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Agregar']);b.onclick=()=>this.openForm(null);header.append(b)}
+    this.append(header);
+
+    // Filter bar
+    const fb=el('div',{style:{padding:'.75rem 1.25rem',borderBottom:'1px solid var(--border)',display:'flex',gap:'.4rem',flexWrap:'wrap'}});
+    ['all',...App.data.categories].forEach(c=>{
+      const on=this.filterCat===c;
+      const p=el('button',{style:{padding:'.28rem .75rem',borderRadius:'20px',border:'1px solid var(--border)',background:on?'var(--accent)':'transparent',color:on?'#fff':'var(--text2)',fontSize:'.78rem',cursor:'pointer',whiteSpace:'nowrap'}},[c==='all'?'Todos':c]);
+      p.onclick=()=>{this.filterCat=c;this.render()};fb.append(p);
+    });
+    this.append(fb);
+
+    // Stat grid
+    const grid=el('div',{class:'stat-grid'});
+    App.data.categories.forEach(cat=>{
+      const items=App.data.equipment.filter(e=>e.category===cat);
+      const total=items.reduce((s,e)=>s+e.quantity,0);
+      const c=catColor(cat);
+      const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'.7rem',position:'relative',overflow:'hidden'}});
+      card.innerHTML=`<div style="position:absolute;left:0;top:0;width:3px;height:100%;background:${c}"></div><div style="font-size:.68rem;color:var(--text3);margin-bottom:.15rem;padding-left:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cat}</div><div style="font-size:1.45rem;font-weight:700;padding-left:5px">${total}</div><div style="font-size:.68rem;color:var(--text3);padding-left:5px">${items.length} mod.</div>`;
+      grid.append(card);
+    });
+    this.append(grid);
+
+    const filtered=this.filterCat==='all'?App.data.equipment:App.data.equipment.filter(e=>e.category===this.filterCat);
+
+    // Desktop table
+    const tw=el('div',{class:'table-wrap'});
+    const tbl=el('table');
+    tbl.innerHTML=`<thead><tr><th>Equipo</th><th>Categoría</th><th>Modelo</th><th style="text-align:center">Total</th><th style="text-align:center">Campo</th><th style="text-align:center">Disponible</th>${isAdmin?'<th style="text-align:center">Acc.</th>':''}</tr></thead>`;
+    const tbody=el('tbody');
+    filtered.forEach(eq=>{
+      const inf=this.inField(eq),avail=eq.quantity-inf;
+      const c=catColor(eq.category);
+      const tr=el('tr');
+      tr.innerHTML=`<td><span style="font-weight:500">${eq.name}</span></td><td><span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${eq.category}</span></td><td style="color:var(--text2)">${eq.model}</td><td style="text-align:center">${eq.quantity}</td><td style="text-align:center;color:var(--amber)">${inf}</td><td style="text-align:center;color:${avail>0?'var(--green)':'var(--red)'}"><strong>${avail}</strong></td>`;
+      if(isAdmin){
+        const acts=el('td',{style:{textAlign:'center',whiteSpace:'nowrap'}});
+        const eb=el('button',{class:'btn',style:{marginRight:'.25rem',fontSize:'.76rem',padding:'.25rem .55rem'}},['✏️']);eb.onclick=()=>this.openForm(eq);
+        const db=el('button',{class:'btn btn-danger',style:{fontSize:'.76rem',padding:'.25rem .55rem'}},['🗑️']);db.onclick=()=>{if(confirm(`¿Eliminar ${eq.name}?`)){App.data.equipment=App.data.equipment.filter(e=>e.id!==eq.id);this.render()}};
+        acts.append(eb,db);tr.append(acts);
+      }
+      tbody.append(tr);
+    });
+    tbl.append(tbody);tw.append(tbl);this.append(tw);
+
+    // Mobile cards
+    const mc=el('div',{class:'mobile-cards'});
+    filtered.forEach(eq=>{
+      const inf=this.inField(eq),avail=eq.quantity-inf,c=catColor(eq.category);
+      const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'.8rem',marginBottom:'.55rem',position:'relative',overflow:'hidden'}});
+      card.innerHTML=`<div style="position:absolute;left:0;top:0;width:3px;height:100%;background:${c}"></div>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.45rem">
+  <div style="padding-left:6px"><div style="font-weight:600;font-size:.88rem;margin-bottom:.15rem">${eq.name}</div><div style="font-size:.74rem;color:var(--text2)">${eq.model}</div></div>
+  <span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}44;font-size:10px;flex-shrink:0;margin-left:.4rem">${eq.category}</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:${isAdmin?'.55rem':'0'}">
+  <div style="background:var(--bg3);border-radius:6px;padding:.4rem;text-align:center"><div style="font-size:.64rem;color:var(--text3);margin-bottom:.1rem">Total</div><div style="font-weight:700;font-size:.95rem">${eq.quantity}</div></div>
+  <div style="background:var(--bg3);border-radius:6px;padding:.4rem;text-align:center"><div style="font-size:.64rem;color:var(--text3);margin-bottom:.1rem">Campo</div><div style="font-weight:700;font-size:.95rem;color:var(--amber)">${inf}</div></div>
+  <div style="background:var(--bg3);border-radius:6px;padding:.4rem;text-align:center"><div style="font-size:.64rem;color:var(--text3);margin-bottom:.1rem">Disponible</div><div style="font-weight:700;font-size:.95rem;color:${avail>0?'var(--green)':'var(--red)'}">${avail}</div></div>
+</div>`;
+      if(isAdmin){
+        const acts=el('div',{style:{display:'flex',gap:'.4rem'}});
+        const eb=el('button',{class:'btn',style:{flex:'1',textAlign:'center',fontSize:'.8rem',padding:'.35rem'}},['✏️ Editar']);eb.onclick=()=>this.openForm(eq);
+        const db=el('button',{class:'btn btn-danger',style:{flex:'1',textAlign:'center',fontSize:'.8rem',padding:'.35rem'}},['🗑️ Eliminar']);db.onclick=()=>{if(confirm(`¿Eliminar ${eq.name}?`)){App.data.equipment=App.data.equipment.filter(e=>e.id!==eq.id);this.render()}};
+        acts.append(eb,db);card.append(acts);
+      }
+      mc.append(card);
+    });
+    this.append(mc);
+  }
+  inField(eq){return App.data.dispatches.filter(d=>d.dateEnd>=today()).flatMap(d=>d.items).filter(it=>it.equipId===eq.id).reduce((s,it)=>s+it.qty,0)}
+  openForm(eq){const m=document.createElement('equipment-form-modal');m.equipment=eq;m.onSave=()=>this.render();this.append(m)}
+}
+customElements.define('equipment-view',EquipmentView);
+
+class EquipmentFormModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const eq=this.equipment,isEdit=!!eq;
+    const box=el('div',{class:'modal-box sm'});
+    box.innerHTML=`<h3 style="font-size:.97rem;font-weight:600;margin-bottom:.9rem">${isEdit?'Editar':'Agregar'} Equipo</h3>`;
+    box.append(ffInput('Nombre','ef-name','text',eq?.name||''));
+    box.append(ffInput('Modelo','ef-model','text',eq?.model||''));
+    box.append(ffSelect('Categoría','ef-cat',App.data.categories.map(c=>({v:c,l:c})),eq?.category||App.data.categories[0]));
+    box.append(ffInput('Cantidad total','ef-qty','number',eq?.quantity??1,{min:'0'}));
+    const footer=el('div',{class:'modal-footer'});
+    const cancel=el('button',{class:'btn'},['Cancelar']);cancel.onclick=()=>this.remove();
+    const save=el('button',{class:'btn btn-primary'},['Guardar']);
+    save.onclick=()=>{
+      const name=box.querySelector('#ef-name').value.trim();
+      const model=box.querySelector('#ef-model').value.trim();
+      const qty=parseInt(box.querySelector('#ef-qty').value)||0;
+      const cat=box.querySelector('#ef-cat').value;
+      if(!name) return;
+      if(isEdit){eq.name=name;eq.model=model;eq.quantity=qty;eq.category=cat}
+      else App.data.equipment.push({id:++App.nextId.equipment,name,model,quantity:qty,category:cat});
+      if(this.onSave)this.onSave();this.remove();
+    };
+    footer.append(cancel,save);box.append(footer);
+    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+  }
+}
+customElements.define('equipment-form-modal',EquipmentFormModal);
+
+// ─── LOCATIONS VIEW ──────────────────────────────────────────────────────────
+class LocationsView extends HTMLElement {
+  connectedCallback(){this.render()}
+  render(){
+    this.innerHTML='';
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>📍 Gestión de Lugares</h2>`;
+    const b=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Agregar']);b.onclick=()=>this.openForm(null);header.append(b);
+    this.append(header);
+    const grid=el('div',{class:'loc-grid'});
+    App.data.locations.forEach(loc=>{
+      const card=el('div',{class:'loc-card'});
+      card.innerHTML=`<div style="position:absolute;top:0;left:0;width:3px;height:100%;background:${loc.color}"></div>`;
+      const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.45rem'}});
+      const info=el('div',{style:{flex:'1',minWidth:0,paddingLeft:'7px'}});
+      info.append(el('div',{style:{fontWeight:'600',marginBottom:'.15rem',fontSize:'.9rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[loc.name]),el('div',{style:{fontSize:'.76rem',color:'var(--text2)'}},[loc.address]));
+      const acts=el('div',{style:{display:'flex',gap:'.3rem',flexShrink:0,marginLeft:'.4rem'}});
+      const eb=el('button',{class:'btn',style:{padding:'.25rem .5rem',fontSize:'.78rem'}},['✏️']);eb.onclick=()=>this.openForm(loc);
+      const db=el('button',{class:'btn btn-danger',style:{padding:'.25rem .5rem',fontSize:'.78rem'}},['🗑️']);db.onclick=()=>{if(confirm(`¿Eliminar "${loc.name}"?`)){App.data.locations=App.data.locations.filter(l=>l.id!==loc.id);this.render()}};
+      acts.append(eb,db);top.append(info,acts);
+      const typeBadge=badge(loc.type==='deposito'?'Depósito':'Lugar de show',loc.color);
+      card.append(top,typeBadge);grid.append(card);
+    });
+    this.append(grid);
+  }
+  openForm(loc){const m=document.createElement('location-form-modal');m.location=loc;m.onSave=()=>this.render();this.append(m)}
+}
+customElements.define('locations-view',LocationsView);
+
+class LocationFormModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const loc=this.location, isEdit=!!loc;
+    // Internal state
+    this._lat = loc?.lat ?? null;
+    this._lng = loc?.lng ?? null;
+    this._miniMap = null;
+    this._miniMarker = null;
+    this._searchTimer = null;
+
+    const box=el('div',{class:'modal-box sm with-ac',style:{overflow:'visible'}});
+
+    // Title
+    const titleRow=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.9rem'}});
+    titleRow.append(el('h3',{style:{fontSize:'.97rem',fontWeight:'600'}},[`${isEdit?'Editar':'Nuevo'} Lugar`]));
+    box.append(titleRow);
+
+    // Name field
+    box.append(ffInput('Nombre del lugar','lf-name','text',loc?.name||''));
+
+    // Address field with autocomplete
+    const addrWrap=el('div',{class:'form-field',style:{position:'relative',zIndex:'10'}});
+    addrWrap.append(el('label',{for:'lf-addr'},['Dirección']));
+    const addrInput=el('input',{id:'lf-addr',type:'text',placeholder:'Buscá cualquier dirección del mundo...',
+      style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',
+             borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem',position:'relative',zIndex:'2'}});
+    if(loc?.address) addrInput.value=loc.address;
+
+    // Spinner indicator
+    const searchStatus=el('div',{style:{fontSize:'.73rem',color:'var(--text3)',marginTop:'.25rem',minHeight:'1rem'}});
+
+    // Suggestions dropdown
+    const dropdown=el('div',{style:{
+      position:'absolute',top:'calc(100% - .85rem)',left:'0',right:'0',
+      background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'0 0 var(--radius) var(--radius)',
+      boxShadow:'0 8px 24px rgba(0,0,0,.5)',maxHeight:'200px',overflowY:'auto',
+      display:'none',zIndex:'50'
+    }});
+
+    addrWrap.append(addrInput, dropdown, searchStatus);
+    box.append(addrWrap);
+
+    // Type select
+    box.append(ffSelect('Tipo','lf-type',[{v:'deposito',l:'Depósito'},{v:'show',l:'Lugar de show'}],loc?.type||'show'));
+
+    // Mini-map preview
+    const mapLabel=el('div',{style:{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.35rem'}},['Vista previa en el mapa']);
+    const mapPlaceholder=el('div',{style:{
+      height:'180px',borderRadius:'var(--radius)',overflow:'hidden',
+      border:'1px solid var(--border)',background:'var(--bg3)',
+      display:'flex',alignItems:'center',justifyContent:'center',
+      color:'var(--text3)',fontSize:'.82rem',flexDirection:'column',gap:'.4rem'
+    }});
+    mapPlaceholder.innerHTML=`<span style="font-size:1.5rem">📍</span><span>${isEdit&&loc.lat?'Cargando mapa...':'Buscá una dirección para ver la ubicación'}</span>`;
+    const miniMapWrap=el('div',{id:'lf-minimap',style:{height:'180px',borderRadius:'var(--radius)',overflow:'hidden',border:'1px solid var(--border)',display:'none'}});
+    const mapContainer=el('div',{style:{marginBottom:'.85rem'}});
+    mapContainer.append(mapLabel,mapPlaceholder,miniMapWrap);
+    box.append(mapContainer);
+
+    // Footer
+    const footer=el('div',{class:'modal-footer'});
+    const cancel=el('button',{class:'btn'},['Cancelar']);cancel.onclick=()=>this.remove();
+    const saveBtn=el('button',{class:'btn btn-primary'},['Guardar']);
+    saveBtn.onclick=()=>{
+      const name=box.querySelector('#lf-name').value.trim();
+      const addr=addrInput.value.trim();
+      const type=box.querySelector('#lf-type').value;
+      const color=type==='deposito'?'#7c6af7':'#22c87a';
+      if(!name){addrInput.focus();return}
+      if(!this._lat||!this._lng){searchStatus.style.color='var(--red)';searchStatus.textContent='Seleccioná una dirección de las sugerencias primero.';return}
+      if(isEdit){loc.name=name;loc.address=addr;loc.lat=this._lat;loc.lng=this._lng;loc.type=type;loc.color=color}
+      else App.data.locations.push({id:++App.nextId.location,name,address:addr,lat:this._lat,lng:this._lng,type,color});
+      if(this.onSave)this.onSave();this.remove();
+    };
+    footer.append(cancel,saveBtn);box.append(footer);
+
+    this.onclick=e=>{if(e.target===this)this.remove()};
+    this.append(box);
+
+    // If editing an existing location, show its map immediately
+    if(isEdit && loc.lat && loc.lng){
+      requestAnimationFrame(()=>this.showMiniMap(loc.lat,loc.lng,loc.address,mapPlaceholder,miniMapWrap));
+    }
+
+    // Autocomplete logic
+    addrInput.addEventListener('input',()=>{
+      clearTimeout(this._searchTimer);
+      const q=addrInput.value.trim();
+      dropdown.style.display='none';dropdown.innerHTML='';
+      if(q.length<4){searchStatus.textContent='';return}
+      searchStatus.style.color='var(--text3)';
+      searchStatus.textContent='Buscando...';
+      this._searchTimer=setTimeout(()=>this.searchAddress(q,dropdown,addrInput,searchStatus,mapPlaceholder,miniMapWrap),400);
+    });
+
+    // Hide dropdown on outside click
+    document.addEventListener('click',(e)=>{if(!addrWrap.contains(e.target))dropdown.style.display='none'},{once:false,capture:false});
+    addrInput.addEventListener('focus',()=>{if(dropdown.children.length)dropdown.style.display='block'});
+  }
+
+  async searchAddress(q, dropdown, input, status, placeholder, miniWrap){
+    try{
+      // Bias to Argentina / Buenos Aires area
+      const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1`;
+      const res=await fetch(url,{headers:{'Accept-Language':'es','User-Agent':'SoundTrackApp/1.0'}});
+      const data=await res.json();
+      dropdown.innerHTML=''; 
+      if(!data.length){status.textContent='Sin resultados. Intentá con más detalle.';dropdown.style.display='none';return}
+      status.textContent='';
+      data.forEach((item,i)=>{
+        const row=el('div',{style:{
+          padding:'.6rem .85rem',cursor:'pointer',fontSize:'.83rem',
+          borderBottom:i<data.length-1?'1px solid var(--border)':'none',
+          color:'var(--text)',lineHeight:'1.35'
+        }});
+        const mainText=item.name||item.display_name.split(',')[0];
+        const subText=item.display_name.split(',').slice(1,4).join(',').trim();
+        row.innerHTML=`<div style="font-weight:500">${mainText}</div><div style="font-size:.75rem;color:var(--text2);margin-top:1px">${subText}</div>`;
+        row.onmouseenter=()=>row.style.background='var(--bg3)';
+        row.onmouseleave=()=>row.style.background='transparent';
+        row.onmousedown=e=>{
+          e.preventDefault();
+          const lat=parseFloat(item.lat), lng=parseFloat(item.lon);
+          input.value=item.display_name.split(',').slice(0,3).join(',').trim();
+          this._lat=lat; this._lng=lng;
+          dropdown.style.display='none'; dropdown.innerHTML='';
+          status.style.color='var(--green)'; status.textContent='✓ Ubicación confirmada';
+          this.showMiniMap(lat,lng,input.value,placeholder,miniWrap);
+        };
+        dropdown.append(row);
+      });
+      dropdown.style.display='block';
+    }catch(e){status.textContent='Error de conexión. Intentá de nuevo.';dropdown.style.display='none'}
+  }
+
+  showMiniMap(lat,lng,label,placeholder,miniWrap){
+    placeholder.style.display='none';
+    miniWrap.style.display='block';
+    if(this._miniMap){
+      this._miniMap.setView([lat,lng],16);
+      if(this._miniMarker) this._miniMarker.setLatLng([lat,lng]);
+      else this._miniMarker=L.marker([lat,lng]).addTo(this._miniMap);
+      return;
+    }
+    // Init mini Leaflet map
+    const map=L.map(miniWrap,{zoomControl:true,attributionControl:false,scrollWheelZoom:false}).setView([lat,lng],16);
+    this._miniMap=map;
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19}).addTo(map);
+    const icon=L.divIcon({className:'',html:`<div style="width:24px;height:24px;border-radius:50%;background:#7c6af755;border:2.5px solid #7c6af7;display:flex;align-items:center;justify-content:center"><div style="width:8px;height:8px;border-radius:50%;background:#7c6af7"></div></div>`,iconSize:[24,24],iconAnchor:[12,12]});
+    this._miniMarker=L.marker([lat,lng],{icon}).addTo(map);
+    // Allow dragging to fine-tune
+    this._miniMarker.setIcon(L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:50%;background:#7c6af755;border:2.5px solid #7c6af7;display:flex;align-items:center;justify-content:center;cursor:move"><div style="width:9px;height:9px;border-radius:50%;background:#7c6af7"></div></div>`,iconSize:[28,28],iconAnchor:[14,14]}));
+    this._miniMarker.options.draggable=true;
+    this._miniMarker.dragging&&this._miniMarker.dragging.enable();
+    this._miniMarker.on('dragend',()=>{const p=this._miniMarker.getLatLng();this._lat=p.lat;this._lng=p.lng;});
+    // Map click to reposition
+    map.on('click',e=>{this._lat=e.latlng.lat;this._lng=e.latlng.lng;this._miniMarker.setLatLng(e.latlng)});
+    setTimeout(()=>map.invalidateSize(),50);
+  }
+}
+customElements.define('location-form-modal',LocationFormModal);
+
+// ─── DISPATCHES VIEW ─────────────────────────────────────────────────────────
+class DispatchesView extends HTMLElement {
+  connectedCallback(){this.render()}
+  render(){
+    this.innerHTML='';
+    const isAdmin=App.isAdmin();
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>📦 Despachos de Equipos</h2>`;
+    if(isAdmin){const b=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Nuevo']);b.onclick=()=>this.openForm();header.append(b)}
+    this.append(header);
+    if(!App.data.dispatches.length){this.append(el('div',{style:{padding:'3rem 1.5rem',textAlign:'center',color:'var(--text3)'}},[isAdmin?'No hay despachos. Creá el primero.':'Sin despachos registrados.']));return}
+    const list=el('div',{class:'dispatch-list'});
+    [...App.data.dispatches].reverse().forEach(d=>{
+      const orig=App.data.locations.find(l=>l.id===d.origin);
+      const dest=App.data.locations.find(l=>l.id===d.destination);
+      const isActive=d.dateEnd>=today();
+      const card=el('div',{class:'dispatch-card'});
+      const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.5rem',gap:'.5rem'}});
+      const route=el('div',{style:{minWidth:0,flex:'1'}});
+      route.innerHTML=`<div style="font-weight:600;font-size:.9rem;margin-bottom:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${orig?.name||'?'} → ${dest?.name||'?'}</div><div style="font-size:.76rem;color:var(--text2)">${fmt(d.dateStart)} — ${fmt(d.dateEnd)}</div>`;
+      const sb=badge(isActive?'Activo':'Finalizado',isActive?'#22c87a':'#888');sb.style.flexShrink='0';
+      top.append(route,sb);
+      const eqRow=el('div',{style:{fontSize:'.82rem',color:'var(--text2)',marginBottom:'.45rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(' · ')]);
+      const meta=el('div',{style:{display:'flex',gap:'.85rem',fontSize:'.76rem',color:'var(--text3)',borderTop:'1px solid var(--border)',paddingTop:'.5rem',flexWrap:'wrap'}});
+      meta.innerHTML=`<span>👤 ${d.generatedBy}</span><span>🚚 ${d.driver}</span>`;
+      const acts=el('div',{class:'dispatch-actions'});
+      const vb=el('button',{class:'btn',style:{fontSize:'.79rem'}},['Ver detalle']);vb.onclick=()=>this.showDetail(d);acts.append(vb);
+      if(isAdmin){const db=el('button',{class:'btn btn-danger',style:{fontSize:'.79rem'}},['Eliminar']);db.onclick=e2=>{e2.stopPropagation();if(confirm('¿Eliminar este despacho?')){App.data.dispatches=App.data.dispatches.filter(x=>x.id!==d.id);this.render()}};acts.append(db)}
+      card.append(top,eqRow,meta,acts);list.append(card);
+    });
+    this.append(list);
+  }
+  openForm(){const m=document.createElement('dispatch-form-modal');m.onSave=()=>this.render();this.append(m)}
+  showDetail(d){const m=document.createElement('dispatch-detail-modal');m.dispatch=d;this.append(m)}
+}
+customElements.define('dispatches-view',DispatchesView);
+
+class DispatchDetailModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const d=this.dispatch;
+    const orig=App.data.locations.find(l=>l.id===d.origin);
+    const dest=App.data.locations.find(l=>l.id===d.destination);
+    const isActive=d.dateEnd>=today();
+    const box=el('div',{class:'modal-box'});
+    const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.85rem'}});
+    top.append(el('h3',{style:{fontSize:'.97rem',fontWeight:'600'}},['Detalle del Despacho']));
+    const cls=el('button',{style:{background:'transparent',border:'none',color:'var(--text2)',fontSize:'1.3rem',padding:'.1rem .3rem',lineHeight:'1'}},['×']);cls.onclick=()=>this.remove();top.append(cls);
+    const ig=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem',marginBottom:'.85rem'}});
+    const ii=(l,v,c)=>{const d2=el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.55rem .65rem'}});d2.innerHTML=`<div style="font-size:.68rem;color:var(--text3);margin-bottom:.15rem">${l}</div><div style="font-weight:500;font-size:.83rem;color:${c||'var(--text)'};">${v}</div>`;return d2};
+    ig.append(ii('Origen',orig?.name||'?'),ii('Destino',dest?.name||'?'),ii('Inicio',fmt(d.dateStart)),ii('Fin',fmt(d.dateEnd),isActive?'var(--green)':'var(--text2)'),ii('Generó',d.generatedBy),ii('Conductor',d.driver));
+    box.append(top,ig);
+    box.append(el('h4',{style:{fontSize:'.74rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.45rem'}},['Equipos despachados']));
+    const eqList=el('div',{style:{marginBottom:'.85rem'}});
+    d.items.forEach(it=>{
+      const eq=App.data.equipment.find(e=>e.id===it.equipId);
+      const row=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.5rem .65rem',background:'var(--bg3)',borderRadius:'8px',marginBottom:'.3rem'}});
+      row.innerHTML=`<span style="font-size:.83rem">${eq?.name||'?'}</span><div style="display:flex;align-items:center;gap:.45rem"><span style="font-size:.73rem;color:var(--text2)">${eq?.category||''}</span><span style="font-weight:600;color:var(--amber)">${it.qty}×</span></div>`;
+      eqList.append(row);
+    });
+    const printBtn=el('button',{class:'btn btn-primary',style:{width:'100%',textAlign:'center'}},['🖨️ Imprimir / Exportar']);
+    printBtn.onclick=()=>this.doPrint(d,orig,dest);
+    box.append(eqList,printBtn);
+    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+  }
+  doPrint(d,orig,dest){
+    const t=today();
+    const eq=d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`<tr><td>${e?.name||'?'}</td><td>${e?.category||''}</td><td>${it.qty}</td></tr>`}).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho #${d.id}</title><style>body{font-family:sans-serif;padding:2rem;color:#111}h1{font-size:1.35rem;margin-bottom:.25rem}table{width:100%;border-collapse:collapse;margin-top:1rem}th,td{border:1px solid #ddd;padding:.5rem .75rem;text-align:left}th{background:#f0f0f0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin:1rem 0}.meta-item{border:1px solid #ddd;border-radius:6px;padding:.55rem}.meta-item label{font-size:.7rem;color:#888;display:block;margin-bottom:.2rem}@media print{body{padding:1rem}}</style></head><body><h1>Despacho de Equipos #${d.id}</h1><p style="color:#888;font-size:.83rem;margin-bottom:1rem">Generado: ${new Date().toLocaleString('es-AR')} · SoundTrack</p><div class="meta"><div class="meta-item"><label>Origen</label><strong>${orig?.name||'?'}</strong></div><div class="meta-item"><label>Destino</label><strong>${dest?.name||'?'}</strong></div><div class="meta-item"><label>Fecha y hora de inicio</label>${fmt(d.dateStart)}</div><div class="meta-item"><label>Fecha y hora de fin</label>${fmt(d.dateEnd)}</div><div class="meta-item"><label>Generó</label>${d.generatedBy}</div><div class="meta-item"><label>Conductor</label>${d.driver}</div></div><table><thead><tr><th>Equipo</th><th>Categoría</th><th>Cantidad</th></tr></thead><tbody>${eq}</tbody></table></body></html>`;
+    const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
+  }
+}
+customElements.define('dispatch-detail-modal',DispatchDetailModal);
+
+class DispatchFormModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const box=el('div',{class:'modal-box wide'});
+    box.innerHTML=`<h3 style="font-size:.97rem;font-weight:600;margin-bottom:.9rem">Nuevo Despacho</h3>`;
+    const r1=el('div',{class:'form-grid-2'});
+    r1.append(ffSelect('Origen','df-orig',App.data.locations.map(l=>({v:l.id,l:l.name}))),ffSelect('Destino','df-dest',App.data.locations.map(l=>({v:l.id,l:l.name}))));
+    box.append(r1);
+    const r2=el('div',{class:'form-grid-2'});
+    r2.append(ffInput('Fecha y hora de inicio','df-start','datetime-local'),ffInput('Fecha y hora de fin','df-end','datetime-local'));
+    box.append(r2);
+    box.append(ffInput('Conductor / Transportista','df-driver','text'));
+    const genW=el('div',{class:'form-field'});
+    genW.append(el('label',{},[' Generado por']));
+    genW.append(el('input',{type:'text',value:App.user?.name||'',readonly:'',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text2)',fontSize:'.9rem'}}));
+    box.append(genW);
+    box.append(el('div',{style:{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.45rem',fontWeight:'500'}},['Equipos']));
+    this.itemsEl=el('div',{style:{marginBottom:'.55rem'}});
+    const addItem=el('button',{style:{background:'transparent',border:'1px dashed var(--border)',borderRadius:'8px',color:'var(--text2)',padding:'.4rem',fontSize:'.81rem',width:'100%',marginBottom:'.75rem',cursor:'pointer'}},['+ Agregar equipo']);
+    addItem.onclick=()=>this.addRow();
+    box.append(this.itemsEl,addItem);
+    this.addRow();
+    const notesW=el('div',{class:'form-field'});
+    notesW.append(el('label',{},[' Notas']));
+    notesW.append(el('textarea',{id:'df-notes',rows:'2',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem',resize:'vertical'}}));
+    box.append(notesW);
+    const footer=el('div',{class:'modal-footer'});
+    const cancel=el('button',{class:'btn'},['Cancelar']);cancel.onclick=()=>this.remove();
+    const save=el('button',{class:'btn btn-primary'},['Guardar despacho']);
+    save.onclick=()=>{
+      const origin=parseInt(box.querySelector('#df-orig').value);
+      const destination=parseInt(box.querySelector('#df-dest').value);
+      const dateStart=box.querySelector('#df-start').value;
+      const dateEnd=box.querySelector('#df-end').value;
+      const driver=box.querySelector('#df-driver').value.trim();
+      const notes=box.querySelector('#df-notes').value.trim();
+      const items=[...this.itemsEl.querySelectorAll('.drow')].map(row=>({equipId:parseInt(row.querySelector('.eq-sel').value),qty:parseInt(row.querySelector('.eq-qty').value)||1})).filter(it=>it.equipId);
+      if(!dateStart||!dateEnd||!driver||!items.length){alert('Completá todos los campos requeridos y al menos un equipo.');return}
+      App.data.dispatches.push({id:++App.nextId.dispatch,origin,destination,dateStart,dateEnd,driver,generatedBy:App.user?.name||'',notes,items});
+      if(this.onSave)this.onSave();this.remove();
+    };
+    footer.append(cancel,save);box.append(footer);
+    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+  }
+  addRow(){
+    const row=el('div',{class:'drow',style:{display:'flex',gap:'.35rem',alignItems:'center',marginBottom:'.35rem'}});
+    const sel=el('select',{class:'eq-sel',style:{flex:'1',minWidth:0,padding:'.5rem .6rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'.83rem'}});
+    App.data.equipment.forEach(e=>sel.append(el('option',{value:e.id},[`${e.name} (${e.category})`])));
+    const qty=el('input',{class:'eq-qty',type:'number',min:'1',value:'1',style:{width:'58px',padding:'.5rem .4rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',textAlign:'center',flexShrink:'0'}});
+    const rem=el('button',{style:{background:'transparent',border:'none',color:'var(--red)',fontSize:'1.1rem',padding:'.1rem .3rem',flexShrink:'0',lineHeight:'1',cursor:'pointer'}},['×']);
+    rem.onclick=()=>row.remove();
+    row.append(sel,qty,rem);this.itemsEl.append(row);
+  }
+}
+customElements.define('dispatch-form-modal',DispatchFormModal);
+
+// ─── BOOT ────────────────────────────────────────────────────────────────────
+document.body.append(document.createElement('app-root'));
+</script>
+</body>
+</html>

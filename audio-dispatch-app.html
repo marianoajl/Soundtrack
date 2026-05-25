@@ -64,7 +64,7 @@ td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:mid
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.65rem;padding:1rem 1.25rem}
 
 /* Modals */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:200;padding:1rem}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:1100;padding:1rem}
 .modal-box{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:1.4rem;width:480px;max-width:100%;max-height:88vh;overflow-y:auto}
 .modal-box.wide{width:560px}
 .modal-box.sm{width:420px}
@@ -116,7 +116,7 @@ td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:mid
   html,body{overflow:hidden;height:100%}
   .app-layout{flex-direction:column;height:100dvh;overflow:hidden}
   .sidebar{display:none}
-  .content-area{overflow:hidden;flex:1;display:flex;flex-direction:column;padding-bottom:0}
+  .content-area{overflow:hidden;flex:1;display:flex;flex-direction:column;padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px))}
 
   /* Bottom nav */
   .bottom-nav{
@@ -128,40 +128,45 @@ td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:mid
   .bnav-btn.active{color:var(--accent)}
   .bnav-icon{font-size:1.3rem;line-height:1}
 
-  /* Map - mobile: ocupa todo el espacio entre header y bottom nav */
-  .map-outer{
-    height:calc(100dvh - 57px - var(--nav-h) - env(safe-area-inset-bottom,0px));
+  /* Map - mobile */
+  map-view{
     display:flex;
     flex-direction:column;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+  }
+  .map-outer{
+    display:flex;
+    flex-direction:column;
+    flex:1;
+    min-height:0;
     overflow:hidden;
   }
   .map-body{
+    display:flex;
     flex-direction:column;
     flex:1;
-    overflow:hidden;
     min-height:0;
+    overflow:hidden;
   }
   .map-container{
-    flex:0 0 50%;
-    height:auto;
+    flex:1 1 0;
     min-height:0;
     max-height:none;
-    transition:flex .25s ease;
-  }
-  .map-container.expanded{
-    flex:1 1 100%;
+    transition:none;
   }
   .map-panel{
     width:100%;
     border-left:none;
     border-top:1px solid var(--border);
     flex:0 0 auto;
-    max-height:45%;
+    max-height:42%;
     overflow-y:auto;
-    transition:max-height .25s ease, opacity .2s ease;
+    transition:max-height .2s ease, opacity .18s ease;
   }
   .map-panel.hidden{
-    max-height:0;
+    max-height:0 !important;
     overflow:hidden;
     opacity:0;
     border-top:none;
@@ -187,18 +192,20 @@ td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:mid
   .modal-overlay{align-items:flex-end;padding:0}
   .modal-box,.modal-box.wide,.modal-box.sm{
     width:100%;max-width:100%;border-radius:var(--radius-lg) var(--radius-lg) 0 0;
-    max-height:91dvh;padding:1rem .9rem 1.4rem;
+    max-height:82dvh;padding:1rem .9rem calc(1.4rem + var(--nav-h) + env(safe-area-inset-bottom,0px));
   }
   .modal-box.with-ac{overflow:visible;max-height:none}
   .form-grid-2{grid-template-columns:1fr}
   .modal-footer{flex-direction:column-reverse}
   .modal-footer .btn{width:100%;text-align:center;padding:.7rem}
+  /* Register name row stacks on mobile */
+  register-screen .rg-name-row{grid-template-columns:1fr!important}
 
   /* Lists */
   .dispatch-list{padding:.75rem}
   .loc-grid{grid-template-columns:1fr;padding:.75rem}
   /* Non-map views need scroll inside fixed container */
-  equipment-view, dispatches-view, locations-view{
+  equipment-view, dispatches-view, locations-view, users-view, mytrips-view{
     display:block;
     height:calc(100dvh - 57px - var(--nav-h) - env(safe-area-inset-bottom,0px));
     overflow-y:auto;
@@ -211,11 +218,13 @@ td{padding:.65rem .5rem;border-bottom:1px solid var(--border);vertical-align:mid
 <script>
 // ─── STATE ──────────────────────────────────────────────────────────────────
 const App = {
-  user:null, view:'login',
+  user:null, view:'login', userLocation:null,
   data:{
     users:[
-      {id:1,name:'Carlos Medina', username:'admin',  password:'admin123',  role:'admin'},
-      {id:2,name:'Laura Ríos',    username:'viewer', password:'viewer123', role:'viewer'}
+      {id:1,name:'Carlos Medina', username:'admin',    password:'admin123',    role:'admin'},
+      {id:2,name:'Laura Ríos',    username:'deposito', password:'dep123',      role:'deposito'},
+      {id:3,name:'Pablo Vera',    username:'viewer',   password:'viewer123',   role:'viewer'},
+      {id:4,name:'Mario González',username:'mario',    password:'mario123',    role:'driver'}
     ],
     locations:[
       {id:1,name:'Depósito Central',type:'deposito',address:'Av. Corrientes 1234, CABA',      lat:-34.6041,  lng:-58.3934,  color:'#7c6af7'},
@@ -237,19 +246,46 @@ const App = {
       {id:10,name:'Wisycom MCR42S',        category:'Antenas de RF',        quantity:4, model:'MCR42S'}
     ],
     dispatches:[
-      {id:1,origin:1,destination:2,items:[{equipId:1,qty:6},{equipId:3,qty:2}],
+      {id:1,origin:1,
+       stops:[
+         {locationId:2,items:[{equipId:1,qty:6},{equipId:3,qty:2}]},
+         {locationId:4,items:[{equipId:5,qty:4}]}
+       ],
        generatedBy:'Carlos Medina',driver:'Mario González',
-       dateStart:'2025-05-10T08:00',dateEnd:'2025-05-12T22:00',notes:'Show Divididos - Teatro Gran Rex'}
+       dateStart:'2025-05-10T08:00',dateEnd:'2025-05-12T22:00',notes:'Show Divididos - Multi parada'}
     ]
   },
-  nextId:{location:10,equipment:20,dispatch:10},
+  nextId:{location:10,equipment:20,dispatch:10,user:10},
   listeners:[],
   on(fn){this.listeners.push(fn)},
   emit(){this.listeners.forEach(fn=>fn())},
   navigate(v){this.view=v;this.emit()},
-  login(u,p){const x=this.data.users.find(u2=>u2.username===u&&u2.password===p);if(x){this.user=x;this.navigate('map');return true}return false},
+  login(u,p){
+    const x=this.data.users.find(u2=>u2.username===u&&u2.password===p);
+    if(x){
+      this.user=x;
+      // Request geolocation — resolves asynchronously
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(
+          pos=>{
+            this.userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
+            this.emit(); // re-render so the map can place the marker
+          },
+          ()=>{ this.userLocation=null; } // denied or unavailable — no problem
+        );
+      }
+      this.navigate(x.role==='driver'?'mytrips':'map');
+      return true;
+    }
+    return false;
+  },
   logout(){this.user=null;this.navigate('login')},
-  isAdmin(){return this.user?.role==='admin'}
+  // role helpers
+  isAdmin(){return this.user?.role==='admin'},
+  canEdit(){return this.user?.role==='admin'||this.user?.role==='deposito'},
+  isDriver(){return this.user?.role==='driver'},
+  roleLabel(r){return{admin:'Administrador',deposito:'Depósito',viewer:'Viewer',driver:'Transportista'}[r]||r},
+  roleColor(r){return{admin:'#7c6af7',deposito:'#f0a020',viewer:'#22c87a',driver:'#3bc0f7'}[r]||'#888'},
 };
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
@@ -278,6 +314,13 @@ const badge=(t,c)=>el('span',{class:'badge',style:{background:c+'22',color:c,bor
 const today=()=>new Date().toISOString().slice(0,16); // "YYYY-MM-DDTHH:MM" — matches datetime-local format
 const isMobile=()=>window.innerWidth<=640;
 
+const allItems=d=>(d.stops||[]).flatMap(s=>s.items||[]);
+const routeLabel=d=>{
+  const orig=App.data.locations.find(l=>l.id===d.origin);
+  const stops=(d.stops||[]).map(s=>App.data.locations.find(l=>l.id===s.locationId)?.name||'?');
+  return [orig?.name||'?',...stops].join(' → ');
+};
+
 function ffInput(label,id,type,value,extra={}){
   const w=el('div',{class:'form-field'});
   w.append(el('label',{for:id},[label]));
@@ -299,7 +342,13 @@ function ffSelect(label,id,options,selected){
 
 class AppRoot extends HTMLElement {
   connectedCallback(){this.render();App.on(()=>this.render())}
-  render(){this.innerHTML='';this.append(document.createElement(App.view==='login'?'login-screen':'app-shell'))}
+  render(){
+    this.innerHTML='';
+    if(App.view==='login') this.append(document.createElement('login-screen'));
+    else if(App.view==='register') this.append(document.createElement('register-screen'));
+    else if(App.view==='admin-register') this.append(document.createElement('admin-register-screen'));
+    else this.append(document.createElement('app-shell'));
+  }
 }
 customElements.define('app-root',AppRoot);
 
@@ -310,8 +359,8 @@ class LoginScreen extends HTMLElement {
     const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:'360px',boxShadow:'var(--shadow)'}});
     const logo=el('div',{style:{textAlign:'center',marginBottom:'1.75rem'}});
     logo.innerHTML=`<div style="font-size:2.2rem;margin-bottom:.45rem">🔊</div><h1 style="font-size:1.45rem;font-weight:700">SoundTrack</h1><p style="color:var(--text2);font-size:.83rem;margin-top:.3rem">Gestión de Equipos de Audio</p>`;
-    const err=el('p',{style:{color:'var(--red)',fontSize:'.83rem',marginBottom:'.75rem',display:'none'}},['Usuario o contraseña incorrectos']);
-    const userIn=el('input',{type:'text',placeholder:'Usuario',style:{width:'100%',padding:'.75rem 1rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',marginBottom:'.65rem',display:'block',fontSize:'1rem'}});
+    const err=el('p',{style:{color:'var(--red)',fontSize:'.83rem',marginBottom:'.75rem',display:'none'}},['Correo o contraseña incorrectos']);
+    const userIn=el('input',{type:'email',placeholder:'Correo electrónico',style:{width:'100%',padding:'.75rem 1rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',marginBottom:'.65rem',display:'block',fontSize:'1rem'}});
     const passWrap=el('div',{style:{position:'relative',marginBottom:'1.1rem'}});
     const passIn=el('input',{type:'password',placeholder:'Contraseña',style:{width:'100%',padding:'.75rem 3rem .75rem 1rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',display:'block',fontSize:'1rem'}});
     const eyeBtn=el('button',{style:{position:'absolute',right:0,top:0,height:'100%',width:'2.75rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:`0 var(--radius) var(--radius) 0`}});
@@ -323,19 +372,706 @@ class LoginScreen extends HTMLElement {
     const loginBtn=el('button',{style:{width:'100%',padding:'.85rem',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius)',fontWeight:'600',fontSize:'1rem'}},['Ingresar']);
     const go=()=>{if(!App.login(userIn.value.trim(),passIn.value)){err.style.display='block';userIn.focus()}};
     loginBtn.onclick=go; passIn.addEventListener('keydown',e=>{if(e.key==='Enter')go()});
-    const hint=el('p',{style:{marginTop:'1.1rem',color:'var(--text3)',fontSize:'.73rem',textAlign:'center'}},['admin / admin123  ·  viewer / viewer123']);
-    card.append(logo,err,userIn,passWrap,loginBtn,hint); this.append(card);
+    const hint=el('p',{style:{marginTop:'1.1rem',color:'var(--text3)',fontSize:'.73rem',textAlign:'center'}},['admin/admin123 · deposito/dep123 · viewer/viewer123 · mario/mario123']);
+    const regLink=el('div',{style:{marginTop:'.85rem',textAlign:'center',fontSize:'.82rem',color:'var(--text2)'}});
+    const regBtn=el('button',{style:{background:'transparent',border:'none',color:'var(--accent)',fontWeight:'500',fontSize:'.82rem',cursor:'pointer',textDecoration:'underline',padding:'0'}},['Crear cuenta nueva']);
+    regBtn.onclick=()=>App.navigate('register');
+    regLink.append('¿Nuevo usuario? ',regBtn);
+    card.append(logo,err,userIn,passWrap,loginBtn,hint,regLink); this.append(card);
   }
 }
 customElements.define('login-screen',LoginScreen);
+
+// ─── REGISTER ─────────────────────────────────────────────────────────────────
+const COUNTRY_CODES=[
+  {code:'+1',    name:'EE.UU.',                           flag:'🇺🇸'},
+  {code:'+1242', name:'Bahamas',                          flag:'🇧🇸'},
+  {code:'+1246', name:'Barbados',                         flag:'🇧🇧'},
+  {code:'+1264', name:'Anguila',                          flag:'🇦🇮'},
+  {code:'+1268', name:'Antigua y Barbuda',                flag:'🇦🇬'},
+  {code:'+1284', name:'Islas Vírgenes Británicas',        flag:'🇻🇬'},
+  {code:'+1345', name:'Islas Caimán',                     flag:'🇰🇾'},
+  {code:'+1441', name:'Bermuda',                          flag:'🇧🇲'},
+  {code:'+1473', name:'Granada',                          flag:'🇬🇩'},
+  {code:'+1649', name:'Islas Turcas y Caicos',            flag:'🇹🇨'},
+  {code:'+1664', name:'Montserrat',                       flag:'🇲🇸'},
+  {code:'+1670', name:'Saipán',                           flag:'🇲🇵'},
+  {code:'+1671', name:'Guam',                             flag:'🇬🇺'},
+  {code:'+1684', name:'Samoa Americana',                  flag:'🇦🇸'},
+  {code:'+1721', name:'Sint Maarten',                     flag:'🇸🇽'},
+  {code:'+1758', name:'Santa Lucía',                      flag:'🇱🇨'},
+  {code:'+1767', name:'Dominica',                         flag:'🇩🇲'},
+  {code:'+1784', name:'San Vicente y las Granadinas',     flag:'🇻🇨'},
+  {code:'+1787', name:'Puerto Rico',                      flag:'🇵🇷'},
+  {code:'+1801', name:'Canadá',                           flag:'🇨🇦'},
+  {code:'+1809', name:'República Dominicana',             flag:'🇩🇴'},
+  {code:'+1868', name:'Trinidad y Tobago',                flag:'🇹🇹'},
+  {code:'+1869', name:'San Cristóbal y Nieves',           flag:'🇰🇳'},
+  {code:'+1876', name:'Jamaica',                          flag:'🇯🇲'},
+  {code:'+20',   name:'Egipto',                           flag:'🇪🇬'},
+  {code:'+212',  name:'Marruecos',                        flag:'🇲🇦'},
+  {code:'+213',  name:'Argelia',                          flag:'🇩🇿'},
+  {code:'+216',  name:'Túnez',                            flag:'🇹🇳'},
+  {code:'+218',  name:'Libia',                            flag:'🇱🇾'},
+  {code:'+220',  name:'Gambia',                           flag:'🇬🇲'},
+  {code:'+221',  name:'Senegal',                          flag:'🇸🇳'},
+  {code:'+222',  name:'Mauritania',                       flag:'🇲🇷'},
+  {code:'+223',  name:'Mali',                             flag:'🇲🇱'},
+  {code:'+224',  name:'Guinea',                           flag:'🇬🇳'},
+  {code:'+225',  name:'Costa de Marfil',                  flag:'🇨🇮'},
+  {code:'+226',  name:'Burkina Faso',                     flag:'🇧🇫'},
+  {code:'+227',  name:'Níger',                            flag:'🇳🇪'},
+  {code:'+228',  name:'Togo',                             flag:'🇹🇬'},
+  {code:'+229',  name:'Benín',                            flag:'🇧🇯'},
+  {code:'+230',  name:'Mauricio',                         flag:'🇲🇺'},
+  {code:'+231',  name:'Liberia',                          flag:'🇱🇷'},
+  {code:'+232',  name:'Sierra Leona',                     flag:'🇸🇱'},
+  {code:'+233',  name:'Ghana',                            flag:'🇬🇭'},
+  {code:'+234',  name:'Nigeria',                          flag:'🇳🇬'},
+  {code:'+235',  name:'Chad',                             flag:'🇹🇩'},
+  {code:'+236',  name:'República Centroafricana',         flag:'🇨🇫'},
+  {code:'+237',  name:'Camerún',                          flag:'🇨🇲'},
+  {code:'+238',  name:'Cabo Verde',                       flag:'🇨🇻'},
+  {code:'+239',  name:'Santo Tomé y Príncipe',            flag:'🇸🇹'},
+  {code:'+240',  name:'Guinea Ecuatorial',                flag:'🇬🇶'},
+  {code:'+241',  name:'Gabón',                            flag:'🇬🇦'},
+  {code:'+242',  name:'República del Congo',              flag:'🇨🇬'},
+  {code:'+243',  name:'República Democrática del Congo',  flag:'🇨🇩'},
+  {code:'+244',  name:'Angola',                           flag:'🇦🇴'},
+  {code:'+245',  name:'Guinea-Bisáu',                     flag:'🇬🇼'},
+  {code:'+246',  name:'Isla Diego García',                flag:'🇮🇴'},
+  {code:'+248',  name:'Seychelles',                       flag:'🇸🇨'},
+  {code:'+249',  name:'Sudán',                            flag:'🇸🇩'},
+  {code:'+250',  name:'Ruanda',                           flag:'🇷🇼'},
+  {code:'+251',  name:'Etiopía',                          flag:'🇪🇹'},
+  {code:'+252',  name:'Somalia',                          flag:'🇸🇴'},
+  {code:'+253',  name:'Yibuti',                           flag:'🇩🇯'},
+  {code:'+254',  name:'Kenia',                            flag:'🇰🇪'},
+  {code:'+255',  name:'Tanzania',                         flag:'🇹🇿'},
+  {code:'+256',  name:'Uganda',                           flag:'🇺🇬'},
+  {code:'+257',  name:'Burundi',                          flag:'🇧🇮'},
+  {code:'+258',  name:'Mozambique',                       flag:'🇲🇿'},
+  {code:'+260',  name:'Zambia',                           flag:'🇿🇲'},
+  {code:'+261',  name:'Madagascar',                       flag:'🇲🇬'},
+  {code:'+262',  name:'Reunión',                          flag:'🇷🇪'},
+  {code:'+263',  name:'Zimbabue',                         flag:'🇿🇼'},
+  {code:'+264',  name:'Namibia',                          flag:'🇳🇦'},
+  {code:'+265',  name:'Malaui',                           flag:'🇲🇼'},
+  {code:'+266',  name:'Lesoto',                           flag:'🇱🇸'},
+  {code:'+267',  name:'Botsuana',                         flag:'🇧🇼'},
+  {code:'+268',  name:'Esuatini',                         flag:'🇸🇿'},
+  {code:'+269',  name:'Comoras',                          flag:'🇰🇲'},
+  {code:'+27',   name:'Sudáfrica',                        flag:'🇿🇦'},
+  {code:'+290',  name:'Santa Elena',                      flag:'🇸🇭'},
+  {code:'+291',  name:'Eritrea',                          flag:'🇪🇷'},
+  {code:'+297',  name:'Aruba',                            flag:'🇦🇼'},
+  {code:'+298',  name:'Islas Feroe',                      flag:'🇫🇴'},
+  {code:'+299',  name:'Groenlandia',                      flag:'🇬🇱'},
+  {code:'+30',   name:'Grecia',                           flag:'🇬🇷'},
+  {code:'+31',   name:'Países Bajos',                     flag:'🇳🇱'},
+  {code:'+32',   name:'Bélgica',                          flag:'🇧🇪'},
+  {code:'+33',   name:'Francia',                          flag:'🇫🇷'},
+  {code:'+34',   name:'España',                           flag:'🇪🇸'},
+  {code:'+36',   name:'Hungría',                          flag:'🇭🇺'},
+  {code:'+39',   name:'Italia',                           flag:'🇮🇹'},
+  {code:'+40',   name:'Rumania',                          flag:'🇷🇴'},
+  {code:'+41',   name:'Suiza',                            flag:'🇨🇭'},
+  {code:'+43',   name:'Austria',                          flag:'🇦🇹'},
+  {code:'+44',   name:'Reino Unido',                      flag:'🇬🇧'},
+  {code:'+45',   name:'Dinamarca',                        flag:'🇩🇰'},
+  {code:'+46',   name:'Suecia',                           flag:'🇸🇪'},
+  {code:'+47',   name:'Noruega',                          flag:'🇳🇴'},
+  {code:'+48',   name:'Polonia',                          flag:'🇵🇱'},
+  {code:'+49',   name:'Alemania',                         flag:'🇩🇪'},
+  {code:'+51',   name:'Perú',                             flag:'🇵🇪'},
+  {code:'+52',   name:'México',                           flag:'🇲🇽'},
+  {code:'+53',   name:'Cuba',                             flag:'🇨🇺'},
+  {code:'+54',   name:'Argentina',                        flag:'🇦🇷'},
+  {code:'+55',   name:'Brasil',                           flag:'🇧🇷'},
+  {code:'+56',   name:'Chile',                            flag:'🇨🇱'},
+  {code:'+57',   name:'Colombia',                         flag:'🇨🇴'},
+  {code:'+58',   name:'Venezuela',                        flag:'🇻🇪'},
+  {code:'+60',   name:'Malasia',                          flag:'🇲🇾'},
+  {code:'+61',   name:'Australia',                        flag:'🇦🇺'},
+  {code:'+62',   name:'Indonesia',                        flag:'🇮🇩'},
+  {code:'+63',   name:'Filipinas',                        flag:'🇵🇭'},
+  {code:'+64',   name:'Nueva Zelanda',                    flag:'🇳🇿'},
+  {code:'+65',   name:'Singapur',                         flag:'🇸🇬'},
+  {code:'+66',   name:'Tailandia',                        flag:'🇹🇭'},
+  {code:'+81',   name:'Japón',                            flag:'🇯🇵'},
+  {code:'+82',   name:'Corea del Sur',                    flag:'🇰🇷'},
+  {code:'+84',   name:'Vietnam',                          flag:'🇻🇳'},
+  {code:'+86',   name:'China',                            flag:'🇨🇳'},
+  {code:'+90',   name:'Turquía',                          flag:'🇹🇷'},
+  {code:'+91',   name:'India',                            flag:'🇮🇳'},
+  {code:'+92',   name:'Pakistán',                         flag:'🇵🇰'},
+  {code:'+93',   name:'Afganistán',                       flag:'🇦🇫'},
+  {code:'+94',   name:'Sri Lanka',                        flag:'🇱🇰'},
+  {code:'+95',   name:'Myanmar',                          flag:'🇲🇲'},
+  {code:'+98',   name:'Irán',                             flag:'🇮🇷'},
+  {code:'+212',  name:'Marruecos',                        flag:'🇲🇦'},
+  {code:'+266',  name:'Lesoto',                           flag:'🇱🇸'},
+  {code:'+290',  name:'Santa Elena',                      flag:'🇸🇭'},
+  {code:'+298',  name:'Islas Feroe',                      flag:'🇫🇴'},
+  {code:'+350',  name:'Gibraltar',                        flag:'🇬🇮'},
+  {code:'+351',  name:'Portugal',                         flag:'🇵🇹'},
+  {code:'+352',  name:'Luxemburgo',                       flag:'🇱🇺'},
+  {code:'+353',  name:'Irlanda',                          flag:'🇮🇪'},
+  {code:'+354',  name:'Islandia',                         flag:'🇮🇸'},
+  {code:'+355',  name:'Albania',                          flag:'🇦🇱'},
+  {code:'+356',  name:'Malta',                            flag:'🇲🇹'},
+  {code:'+357',  name:'Chipre',                           flag:'🇨🇾'},
+  {code:'+358',  name:'Finlandia',                        flag:'🇫🇮'},
+  {code:'+359',  name:'Bulgaria',                         flag:'🇧🇬'},
+  {code:'+370',  name:'Lituania',                         flag:'🇱🇹'},
+  {code:'+371',  name:'Letonia',                          flag:'🇱🇻'},
+  {code:'+372',  name:'Estonia',                          flag:'🇪🇪'},
+  {code:'+373',  name:'Moldavia',                         flag:'🇲🇩'},
+  {code:'+374',  name:'Armenia',                          flag:'🇦🇲'},
+  {code:'+375',  name:'Bielorrusia',                      flag:'🇧🇾'},
+  {code:'+376',  name:'Andorra',                          flag:'🇦🇩'},
+  {code:'+377',  name:'Mónaco',                           flag:'🇲🇨'},
+  {code:'+378',  name:'San Marino',                       flag:'🇸🇲'},
+  {code:'+380',  name:'Ucrania',                          flag:'🇺🇦'},
+  {code:'+381',  name:'Serbia',                           flag:'🇷🇸'},
+  {code:'+382',  name:'Montenegro',                       flag:'🇲🇪'},
+  {code:'+383',  name:'Kosovo',                           flag:'🇽🇰'},
+  {code:'+385',  name:'Croacia',                          flag:'🇭🇷'},
+  {code:'+386',  name:'Eslovenia',                        flag:'🇸🇮'},
+  {code:'+387',  name:'Bosnia y Herzegovina',             flag:'🇧🇦'},
+  {code:'+389',  name:'Macedonia del Norte',              flag:'🇲🇰'},
+  {code:'+420',  name:'Chequia',                          flag:'🇨🇿'},
+  {code:'+421',  name:'Eslovaquia',                       flag:'🇸🇰'},
+  {code:'+423',  name:'Liechtenstein',                    flag:'🇱🇮'},
+  {code:'+500',  name:'Islas Malvinas',                   flag:'🇫🇰'},
+  {code:'+501',  name:'Belice',                           flag:'🇧🇿'},
+  {code:'+502',  name:'Guatemala',                        flag:'🇬🇹'},
+  {code:'+503',  name:'El Salvador',                      flag:'🇸🇻'},
+  {code:'+504',  name:'Honduras',                         flag:'🇭🇳'},
+  {code:'+505',  name:'Nicaragua',                        flag:'🇳🇮'},
+  {code:'+506',  name:'Costa Rica',                       flag:'🇨🇷'},
+  {code:'+507',  name:'Panamá',                           flag:'🇵🇦'},
+  {code:'+508',  name:'San Pedro y Miquelón',             flag:'🇵🇲'},
+  {code:'+509',  name:'Haití',                            flag:'🇭🇹'},
+  {code:'+590',  name:'Guadalupe',                        flag:'🇬🇵'},
+  {code:'+591',  name:'Bolivia',                          flag:'🇧🇴'},
+  {code:'+592',  name:'Guyana',                           flag:'🇬🇾'},
+  {code:'+593',  name:'Ecuador',                          flag:'🇪🇨'},
+  {code:'+594',  name:'Guayana Francesa',                 flag:'🇬🇫'},
+  {code:'+595',  name:'Paraguay',                         flag:'🇵🇾'},
+  {code:'+596',  name:'Martinica',                        flag:'🇲🇶'},
+  {code:'+597',  name:'Surinam',                          flag:'🇸🇷'},
+  {code:'+598',  name:'Uruguay',                          flag:'🇺🇾'},
+  {code:'+599',  name:'Curazao',                          flag:'🇨🇼'},
+  {code:'+670',  name:'Timor Oriental',                   flag:'🇹🇱'},
+  {code:'+672',  name:'Isla Norfolk',                     flag:'🇳🇫'},
+  {code:'+673',  name:'Brunéi',                           flag:'🇧🇳'},
+  {code:'+674',  name:'Nauru',                            flag:'🇳🇷'},
+  {code:'+675',  name:'Papúa Nueva Guinea',               flag:'🇵🇬'},
+  {code:'+676',  name:'Tonga',                            flag:'🇹🇴'},
+  {code:'+677',  name:'Islas Salomón',                    flag:'🇸🇧'},
+  {code:'+678',  name:'Vanuatu',                          flag:'🇻🇺'},
+  {code:'+679',  name:'Fiyi',                             flag:'🇫🇯'},
+  {code:'+680',  name:'Palaos',                           flag:'🇵🇼'},
+  {code:'+681',  name:'Wallis y Futuna',                  flag:'🇼🇫'},
+  {code:'+682',  name:'Islas Cook',                       flag:'🇨🇰'},
+  {code:'+683',  name:'Niue',                             flag:'🇳🇺'},
+  {code:'+684',  name:'Samoa Americana',                  flag:'🇦🇸'},
+  {code:'+685',  name:'Samoa',                            flag:'🇼🇸'},
+  {code:'+686',  name:'Kiribati',                         flag:'🇰🇮'},
+  {code:'+687',  name:'Nueva Caledonia',                  flag:'🇳🇨'},
+  {code:'+688',  name:'Tuvalu',                           flag:'🇹🇻'},
+  {code:'+689',  name:'Polinesia Francesa',               flag:'🇵🇫'},
+  {code:'+690',  name:'Tokelau',                          flag:'🇹🇰'},
+  {code:'+691',  name:'Micronesia',                       flag:'🇫🇲'},
+  {code:'+692',  name:'Islas Marshall',                   flag:'🇲🇭'},
+  {code:'+850',  name:'Corea del Norte',                  flag:'🇰🇵'},
+  {code:'+852',  name:'Hong Kong',                        flag:'🇭🇰'},
+  {code:'+853',  name:'Macao',                            flag:'🇲🇴'},
+  {code:'+855',  name:'Camboya',                          flag:'🇰🇭'},
+  {code:'+856',  name:'Laos',                             flag:'🇱🇦'},
+  {code:'+880',  name:'Bangladesh',                       flag:'🇧🇩'},
+  {code:'+886',  name:'Taiwán',                           flag:'🇹🇼'},
+  {code:'+960',  name:'Maldivas',                         flag:'🇲🇻'},
+  {code:'+961',  name:'Líbano',                           flag:'🇱🇧'},
+  {code:'+962',  name:'Jordania',                         flag:'🇯🇴'},
+  {code:'+963',  name:'Siria',                            flag:'🇸🇾'},
+  {code:'+964',  name:'Irak',                             flag:'🇮🇶'},
+  {code:'+965',  name:'Kuwait',                           flag:'🇰🇼'},
+  {code:'+966',  name:'Arabia Saudí',                     flag:'🇸🇦'},
+  {code:'+967',  name:'Yemen',                            flag:'🇾🇪'},
+  {code:'+968',  name:'Omán',                             flag:'🇴🇲'},
+  {code:'+970',  name:'Palestina',                        flag:'🇵🇸'},
+  {code:'+971',  name:'Emiratos Árabes Unidos',           flag:'🇦🇪'},
+  {code:'+972',  name:'Israel',                           flag:'🇮🇱'},
+  {code:'+973',  name:'Baréin',                           flag:'🇧🇭'},
+  {code:'+974',  name:'Catar',                            flag:'🇶🇦'},
+  {code:'+975',  name:'Bután',                            flag:'🇧🇹'},
+  {code:'+976',  name:'Mongolia',                         flag:'🇲🇳'},
+  {code:'+977',  name:'Nepal',                            flag:'🇳🇵'},
+  {code:'+992',  name:'Tayikistán',                       flag:'🇹🇯'},
+  {code:'+993',  name:'Turkmenistán',                     flag:'🇹🇲'},
+  {code:'+994',  name:'Azerbaiyán',                       flag:'🇦🇿'},
+  {code:'+995',  name:'Georgia',                          flag:'🇬🇪'},
+  {code:'+996',  name:'Kirguistán',                       flag:'🇰🇬'},
+  {code:'+998',  name:'Uzbekistán',                       flag:'🇺🇿'},
+];
+
+class RegisterScreen extends HTMLElement {
+  connectedCallback(){
+    this.style.cssText='display:flex;align-items:center;justify-content:center;min-height:100svh;padding:1rem;background:var(--bg)';
+    const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:'380px',boxShadow:'var(--shadow)',maxHeight:'95svh',overflowY:'auto',margin:'auto'}});
+
+    // Logo
+    const logo=el('div',{style:{textAlign:'center',marginBottom:'1.5rem'}});
+    logo.innerHTML=`<div style="font-size:2rem;margin-bottom:.4rem">🔊</div><h1 style="font-size:1.35rem;font-weight:700">Crear cuenta</h1><p style="color:var(--text2);font-size:.82rem;margin-top:.25rem">SoundTrack · Audio</p>`;
+    card.append(logo);
+
+    // Store field wrappers to mark them red
+    const fieldWrappers={};
+
+    // Name
+    const fnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    fnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Nombre']));
+    const fnIn=el('input',{id:'rg-fname',type:'text',placeholder:'Nombre',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    fnWrap.append(fnIn);
+    card.append(fnWrap);
+    fieldWrappers.firstName=fnWrap;
+
+    // Lastname
+    const lnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    lnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Apellido']));
+    const lnIn=el('input',{id:'rg-lname',type:'text',placeholder:'Apellido',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    lnWrap.append(lnIn);
+    card.append(lnWrap);
+    fieldWrappers.lastName=lnWrap;
+
+    // Phone with country code
+    const phoneWrap=el('div',{style:{marginBottom:'.65rem'}});
+    phoneWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Teléfono']));
+    const phoneRow=el('div',{style:{display:'flex',gap:'.3rem',width:'100%'}});
+    const codeSel=el('select',{id:'rg-code',style:{width:'95px',flexShrink:'0',padding:'.6rem .4rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.8rem'}});
+    COUNTRY_CODES.forEach(c=>{
+      const opt=el('option',{value:c.code},[`${c.flag} ${c.code}`]);
+      if(c.code==='+54') opt.selected=true;
+      codeSel.append(opt);
+    });
+    const phoneIn=el('input',{id:'rg-phone',type:'tel',placeholder:'Número',style:{flex:'1',minWidth:'0',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    phoneRow.append(codeSel,phoneIn);
+    phoneWrap.append(phoneRow);
+    card.append(phoneWrap);
+    fieldWrappers.phone=phoneWrap;
+
+    // Email
+    const emailWrap=el('div',{style:{marginBottom:'.65rem'}});
+    emailWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Correo electrónico']));
+    const emailIn=el('input',{id:'rg-email',type:'email',placeholder:'ejemplo@correo.com',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    emailWrap.append(emailIn);
+    card.append(emailWrap);
+    fieldWrappers.email=emailWrap;
+
+    // Email confirm
+    const email2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+    email2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar correo']));
+    const email2In=el('input',{id:'rg-email2',type:'email',placeholder:'Confirmá tu correo',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    email2Wrap.append(email2In);
+    card.append(email2Wrap);
+    fieldWrappers.email2=email2Wrap;
+
+    // Helper for password validation
+    const validatePass=(pass)=>({
+      length:pass.length>=8,
+      lower:/[a-z]/.test(pass),
+      upper:/[A-Z]/.test(pass),
+      digit:/\d/.test(pass),
+      special:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)
+    });
+
+    // Password field with strength checker
+    const passWrap=el('div',{style:{marginBottom:'.65rem'}});
+    passWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Contraseña']));
+    const passPw=el('div',{style:{position:'relative',marginBottom:'.35rem'}});
+    const passIn=el('input',{id:'rg-pass',type:'password',placeholder:'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    const passEye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+    const svgEye=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    passEye.innerHTML=svgEye; let passVis=false;
+    passEye.onclick=(e)=>{e.preventDefault();passVis=!passVis;passIn.type=passVis?'text':'password';passEye.innerHTML=passVis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;passEye.style.color=passVis?'var(--accent)':'var(--text3)'};
+    passPw.append(passIn,passEye);
+
+    // Strength requirements checker
+    const reqList=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.3rem',fontSize:'.72rem',color:'var(--text3)',marginBottom:'.4rem'}});
+    const mkReq=(text,id)=>{
+      const req=el('div',{id,style:{display:'flex',alignItems:'center',gap:'.3rem',padding:'.25rem'}});
+      req.append(el('span',{style:{fontSize:'.8rem'}},['○']),el('span',{},[text]));
+      return req;
+    };
+    const req8=mkReq('8+ caracteres','rq-len');
+    const reqLow=mkReq('Minúscula','rq-low');
+    const reqUp=mkReq('Mayúscula','rq-up');
+    const reqDig=mkReq('Número','rq-dig');
+    const reqSpe=mkReq('Carácter especial','rq-spe');
+    reqList.append(req8,reqLow,reqUp,reqDig,reqSpe);
+    passWrap.append(passPw,reqList);
+
+    // Update checker on input
+    const updateReqs=()=>{
+      const v=validatePass(passIn.value);
+      document.getElementById('rq-len').style.color=v.length?'var(--green)':'var(--text3)';
+      document.getElementById('rq-len').querySelector('span').textContent=v.length?'✓':'○';
+      document.getElementById('rq-low').style.color=v.lower?'var(--green)':'var(--text3)';
+      document.getElementById('rq-low').querySelector('span').textContent=v.lower?'✓':'○';
+      document.getElementById('rq-up').style.color=v.upper?'var(--green)':'var(--text3)';
+      document.getElementById('rq-up').querySelector('span').textContent=v.upper?'✓':'○';
+      document.getElementById('rq-dig').style.color=v.digit?'var(--green)':'var(--text3)';
+      document.getElementById('rq-dig').querySelector('span').textContent=v.digit?'✓':'○';
+      document.getElementById('rq-spe').style.color=v.special?'var(--green)':'var(--text3)';
+      document.getElementById('rq-spe').querySelector('span').textContent=v.special?'✓':'○';
+      // Update password match check
+      const match=passIn.value===pass2In.value&&passIn.value.length>0;
+      document.getElementById('rq-match').style.color=match?'var(--green)':'var(--text3)';
+      document.getElementById('rq-match').querySelector('span').textContent=match?'✓':'○';
+    };
+    passIn.addEventListener('input',updateReqs);
+    card.append(passWrap);
+
+    // Confirm password field
+    const pass2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+    pass2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar contraseña']));
+    const pass2Pw=el('div',{style:{position:'relative'}});
+    const pass2In=el('input',{id:'rg-pass2',type:'password',placeholder:'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    const pass2Eye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+    pass2Eye.innerHTML=svgEye; let pass2Vis=false;
+    pass2Eye.onclick=(e)=>{e.preventDefault();pass2Vis=!pass2Vis;pass2In.type=pass2Vis?'text':'password';pass2Eye.innerHTML=pass2Vis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;pass2Eye.style.color=pass2Vis?'var(--accent)':'var(--text3)'};
+    pass2Pw.append(pass2In,pass2Eye);
+    pass2Wrap.append(pass2Pw);
+    
+    // Add password match check to the requirements list
+    const matchReq=mkReq('Contraseñas coinciden','rq-match');
+    pass2Wrap.append(matchReq);
+    
+    pass2In.addEventListener('input',updateReqs);
+    card.append(pass2Wrap);
+    fieldWrappers.password=passWrap;
+    fieldWrappers.password2=pass2Wrap;
+
+    // Submit
+    const submitBtn=el('button',{style:{width:'100%',padding:'.8rem',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius)',fontWeight:'600',fontSize:'1rem',marginTop:'.1rem',marginBottom:'.75rem',cursor:'pointer'}},['Crear cuenta']);
+
+    const clearFields=()=>{Object.values(fieldWrappers).forEach(w=>{const inp=w.querySelector('input');if(inp)inp.style.borderColor='var(--border)'})};
+    const markFieldRed=(fieldName)=>{if(fieldWrappers[fieldName]){const inp=fieldWrappers[fieldName].querySelector('input');if(inp)inp.style.borderColor='var(--red)'}};
+    
+    const showError=(msg,fieldName=null)=>{
+      clearFields();
+      if(fieldName) markFieldRed(fieldName);
+      const errorModal=el('div',{className:'modal-overlay',style:{position:'fixed',inset:0,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1100,padding:'1rem'}});
+      const errorBox=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'1.4rem',width:'480px',maxWidth:'100%',boxShadow:'var(--shadow)'}});
+      const errMsg=el('p',{style:{fontSize:'.95rem',color:'var(--text)',marginBottom:'.75rem',lineHeight:1.5}},[msg]);
+      const errBtn=el('button',{class:'btn btn-primary',style:{width:'100%',textAlign:'center',padding:'.7rem'}},[' Aceptar']);
+      errBtn.onclick=()=>errorModal.remove();
+      errorBox.append(errMsg,errBtn);
+      errorModal.append(errorBox);
+      document.body.append(errorModal);
+      errorModal.onclick=(e)=>{if(e.target===errorModal)errorModal.remove()};
+    };
+
+    submitBtn.onclick=()=>{
+      clearFields();
+      const firstName=fnIn.value.trim();
+      const lastName=lnIn.value.trim();
+      const countryCode=codeSel.value;
+      const phone=phoneIn.value.trim();
+      const email=emailIn.value.trim();
+      const email2=email2In.value.trim();
+      const pass=passIn.value;
+      const pass2=pass2In.value;
+
+      if(!firstName||!lastName){showError('Nombre y apellido son obligatorios.','firstName');return}
+      if(!phone){showError('Ingresá tu número de teléfono.','phone');return}
+      if(!/^\d{4,15}$/.test(phone.replace(/\s|-/g,''))){showError('Número de teléfono inválido (solo dígitos, 4-15).','phone');return}
+      if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showError('Correo electrónico inválido.','email');return}
+      if(email!==email2){showError('Los correos electrónicos no coinciden.','email2');return}
+      if(App.data.users.find(u=>u.username===email)){showError('Ese correo ya está registrado.','email');return}
+      
+      // Validate password
+      const passVal=validatePass(pass);
+      if(!pass){showError('Ingresá una contraseña.','password');return}
+      if(pass!==pass2){showError('Las contraseñas no coinciden.','password2');return}
+      if(!passVal.length){showError('La contraseña debe tener al menos 8 caracteres.','password');return}
+      if(!passVal.lower){showError('La contraseña debe incluir una letra minúscula.','password');return}
+      if(!passVal.upper){showError('La contraseña debe incluir una letra mayúscula.','password');return}
+      if(!passVal.digit){showError('La contraseña debe incluir un número.','password');return}
+      if(!passVal.special){showError('La contraseña debe incluir un carácter especial (!@#$%^&*...).','password');return}
+
+      // Create user
+      const name=`${firstName} ${lastName}`;
+      App.data.users.push({
+        id:++App.nextId.user,
+        name,
+        firstName,
+        lastName,
+        username:email,
+        email,
+        phone:`${countryCode} ${phone}`,
+        password:pass,
+        role:'viewer'
+      });
+
+      App.navigate('login');
+    };
+
+    card.append(submitBtn);
+
+    // Back link
+    const backRow=el('div',{style:{textAlign:'center',fontSize:'.82rem',color:'var(--text2)'}});
+    const backBtn=el('button',{style:{background:'transparent',border:'none',color:'var(--accent)',fontWeight:'500',fontSize:'.82rem',cursor:'pointer',textDecoration:'underline',padding:'0'}},['Volver al login']);
+    backBtn.onclick=()=>App.navigate('login');
+    backRow.append('¿Ya tenés cuenta? ',backBtn);
+    card.append(backRow);
+
+    this.append(card);
+  }
+}
+customElements.define('register-screen',RegisterScreen);
+
+// ─── ADMIN REGISTER SCREEN (for adding new users) ────────────────────────────
+class AdminRegisterScreen extends HTMLElement {
+  connectedCallback(){
+    this.style.cssText='display:flex;align-items:center;justify-content:center;min-height:100svh;padding:1rem;background:var(--bg)';
+    const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:'380px',boxShadow:'var(--shadow)',maxHeight:'95svh',overflowY:'auto',margin:'auto'}});
+
+    // Store field wrappers to mark them red
+    const fieldWrappers={};
+
+    // Logo
+    const logo=el('div',{style:{textAlign:'center',marginBottom:'1.5rem'}});
+    logo.innerHTML=`<div style="font-size:2rem;margin-bottom:.4rem">👥</div><h1 style="font-size:1.35rem;font-weight:700">Nuevo Usuario</h1><p style="color:var(--text2);font-size:.82rem;margin-top:.25rem">Gestión de Usuarios</p>`;
+    card.append(logo);
+
+    // Name
+    const fnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    fnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Nombre']));
+    const fnIn=el('input',{id:'arg-fname',type:'text',placeholder:'Nombre',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    fnWrap.append(fnIn);
+    card.append(fnWrap);
+    fieldWrappers.firstName=fnWrap;
+
+    // Lastname
+    const lnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    lnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Apellido']));
+    const lnIn=el('input',{id:'arg-lname',type:'text',placeholder:'Apellido',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    lnWrap.append(lnIn);
+    card.append(lnWrap);
+    fieldWrappers.lastName=lnWrap;
+
+    // Phone with country code
+    const phoneWrap=el('div',{style:{marginBottom:'.65rem'}});
+    phoneWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Teléfono']));
+    const phoneRow=el('div',{style:{display:'flex',gap:'.3rem',width:'100%'}});
+    const codeSel=el('select',{id:'arg-code',style:{width:'95px',flexShrink:'0',padding:'.6rem .4rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.8rem'}});
+    COUNTRY_CODES.forEach(c=>{
+      const opt=el('option',{value:c.code},[`${c.flag} ${c.code}`]);
+      if(c.code==='+54') opt.selected=true;
+      codeSel.append(opt);
+    });
+    const phoneIn=el('input',{id:'arg-phone',type:'tel',placeholder:'Número',style:{flex:'1',minWidth:'0',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    phoneRow.append(codeSel,phoneIn);
+    phoneWrap.append(phoneRow);
+    card.append(phoneWrap);
+    fieldWrappers.phone=phoneWrap;
+
+    // Email
+    const emailWrap=el('div',{style:{marginBottom:'.65rem'}});
+    emailWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Correo electrónico']));
+    const emailIn=el('input',{id:'arg-email',type:'email',placeholder:'ejemplo@correo.com',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    emailWrap.append(emailIn);
+    card.append(emailWrap);
+    fieldWrappers.email=emailWrap;
+
+    // Email confirm
+    const email2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+    email2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar correo']));
+    const email2In=el('input',{id:'arg-email2',type:'email',placeholder:'Confirmá tu correo',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    email2Wrap.append(email2In);
+    card.append(email2Wrap);
+    fieldWrappers.email2=email2Wrap;
+
+    // Helper for password validation
+    const validatePass=(pass)=>({
+      length:pass.length>=8,
+      lower:/[a-z]/.test(pass),
+      upper:/[A-Z]/.test(pass),
+      digit:/\d/.test(pass),
+      special:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)
+    });
+
+    // Password field with strength checker
+    const passWrap=el('div',{style:{marginBottom:'.65rem'}});
+    passWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Contraseña']));
+    const passPw=el('div',{style:{position:'relative',marginBottom:'.35rem'}});
+    const passIn=el('input',{id:'arg-pass',type:'password',placeholder:'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    const passEye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+    const svgEye=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    passEye.innerHTML=svgEye; let passVis=false;
+    passEye.onclick=(e)=>{e.preventDefault();passVis=!passVis;passIn.type=passVis?'text':'password';passEye.innerHTML=passVis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;passEye.style.color=passVis?'var(--accent)':'var(--text3)'};
+    passPw.append(passIn,passEye);
+
+    // Strength requirements checker
+    const reqList=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.3rem',fontSize:'.72rem',color:'var(--text3)',marginBottom:'.4rem'}});
+    const mkReq=(text,id)=>{
+      const req=el('div',{id,style:{display:'flex',alignItems:'center',gap:'.3rem',padding:'.25rem'}});
+      req.append(el('span',{style:{fontSize:'.8rem'}},['○']),el('span',{},[text]));
+      return req;
+    };
+    const req8=mkReq('8+ caracteres','arg-rq-len');
+    const reqLow=mkReq('Minúscula','arg-rq-low');
+    const reqUp=mkReq('Mayúscula','arg-rq-up');
+    const reqDig=mkReq('Número','arg-rq-dig');
+    const reqSpe=mkReq('Carácter especial','arg-rq-spe');
+    reqList.append(req8,reqLow,reqUp,reqDig,reqSpe);
+    passWrap.append(passPw,reqList);
+
+    // Update checker on input
+    const updateReqs=()=>{
+      const v=validatePass(passIn.value);
+      document.getElementById('arg-rq-len').style.color=v.length?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-len').querySelector('span').textContent=v.length?'✓':'○';
+      document.getElementById('arg-rq-low').style.color=v.lower?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-low').querySelector('span').textContent=v.lower?'✓':'○';
+      document.getElementById('arg-rq-up').style.color=v.upper?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-up').querySelector('span').textContent=v.upper?'✓':'○';
+      document.getElementById('arg-rq-dig').style.color=v.digit?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-dig').querySelector('span').textContent=v.digit?'✓':'○';
+      document.getElementById('arg-rq-spe').style.color=v.special?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-spe').querySelector('span').textContent=v.special?'✓':'○';
+      // Update password match check
+      const match=passIn.value===pass2In.value&&passIn.value.length>0;
+      document.getElementById('arg-rq-match').style.color=match?'var(--green)':'var(--text3)';
+      document.getElementById('arg-rq-match').querySelector('span').textContent=match?'✓':'○';
+    };
+    passIn.addEventListener('input',updateReqs);
+    card.append(passWrap);
+
+    // Confirm password field
+    const pass2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+    pass2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar contraseña']));
+    const pass2Pw=el('div',{style:{position:'relative'}});
+    const pass2In=el('input',{id:'arg-pass2',type:'password',placeholder:'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    const pass2Eye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+    pass2Eye.innerHTML=svgEye; let pass2Vis=false;
+    pass2Eye.onclick=(e)=>{e.preventDefault();pass2Vis=!pass2Vis;pass2In.type=pass2Vis?'text':'password';pass2Eye.innerHTML=pass2Vis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;pass2Eye.style.color=pass2Vis?'var(--accent)':'var(--text3)'};
+    pass2Pw.append(pass2In,pass2Eye);
+    pass2Wrap.append(pass2Pw);
+
+    // Add password match check to the requirements list
+    const matchReq=mkReq('Contraseñas coinciden','arg-rq-match');
+    pass2Wrap.append(matchReq);
+    
+    pass2In.addEventListener('input',updateReqs);
+    card.append(pass2Wrap);
+    fieldWrappers.password=passWrap;
+    fieldWrappers.password2=pass2Wrap;
+
+    // Role select
+    const roleWrap=el('div',{style:{marginBottom:'.65rem'}});
+    roleWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Perfil de usuario']));
+    const roleSel=el('select',{id:'arg-role',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    [{v:'admin',l:'Administrador'},{v:'deposito',l:'Depósito'},{v:'viewer',l:'Viewer'},{v:'driver',l:'Transportista'}].forEach(r=>{
+      const opt=el('option',{value:r.v},[r.l]);
+      roleSel.append(opt);
+    });
+    roleWrap.append(roleSel);
+    card.append(roleWrap);
+
+    // Submit
+    const submitBtn=el('button',{style:{width:'100%',padding:'.8rem',background:'var(--accent)',color:'#fff',border:'none',borderRadius:'var(--radius)',fontWeight:'600',fontSize:'1rem',marginTop:'.1rem',marginBottom:'.75rem',cursor:'pointer'}},['Crear usuario']);
+
+    const clearFields=()=>{Object.values(fieldWrappers).forEach(w=>{const inp=w.querySelector('input');if(inp)inp.style.borderColor='var(--border)'})};
+    const markFieldRed=(fieldName)=>{if(fieldWrappers[fieldName]){const inp=fieldWrappers[fieldName].querySelector('input');if(inp)inp.style.borderColor='var(--red)'}};
+    
+    const showError=(msg,fieldName=null)=>{
+      clearFields();
+      if(fieldName) markFieldRed(fieldName);
+      const errorModal=el('div',{className:'modal-overlay',style:{position:'fixed',inset:0,background:'rgba(0,0,0,.65)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1100,padding:'1rem'}});
+      const errorBox=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border2)',borderRadius:'var(--radius-lg)',padding:'1.4rem',width:'480px',maxWidth:'100%',boxShadow:'var(--shadow)'}});
+      const errMsg=el('p',{style:{fontSize:'.95rem',color:'var(--text)',marginBottom:'.75rem',lineHeight:1.5}},[msg]);
+      const errBtn=el('button',{class:'btn btn-primary',style:{width:'100%',textAlign:'center',padding:'.7rem'}},[' Aceptar']);
+      errBtn.onclick=()=>errorModal.remove();
+      errorBox.append(errMsg,errBtn);
+      errorModal.append(errorBox);
+      document.body.append(errorModal);
+      errorModal.onclick=(e)=>{if(e.target===errorModal)errorModal.remove()};
+    };
+
+    submitBtn.onclick=()=>{
+      clearFields();
+      const firstName=fnIn.value.trim();
+      const lastName=lnIn.value.trim();
+      const countryCode=codeSel.value;
+      const phone=phoneIn.value.trim();
+      const email=emailIn.value.trim();
+      const email2=email2In.value.trim();
+      const pass=passIn.value;
+      const pass2=pass2In.value;
+      const role=roleSel.value;
+
+      if(!firstName||!lastName){showError('Nombre y apellido son obligatorios.','firstName');return}
+      if(!phone){showError('Ingresá tu número de teléfono.','phone');return}
+      if(!/^\d{4,15}$/.test(phone.replace(/\s|-/g,''))){showError('Número de teléfono inválido (solo dígitos, 4-15).','phone');return}
+      if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showError('Correo electrónico inválido.','email');return}
+      if(email!==email2){showError('Los correos electrónicos no coinciden.','email2');return}
+      if(App.data.users.find(u=>u.username===email)){showError('Ese correo ya está registrado.','email');return}
+      
+      // Validate password
+      const passVal=validatePass(pass);
+      if(!pass){showError('Ingresá una contraseña.','password');return}
+      if(pass!==pass2){showError('Las contraseñas no coinciden.','password2');return}
+      if(!passVal.length){showError('La contraseña debe tener al menos 8 caracteres.','password');return}
+      if(!passVal.lower){showError('La contraseña debe incluir una letra minúscula.','password');return}
+      if(!passVal.upper){showError('La contraseña debe incluir una letra mayúscula.','password');return}
+      if(!passVal.digit){showError('La contraseña debe incluir un número.','password');return}
+      if(!passVal.special){showError('La contraseña debe incluir un carácter especial (!@#$%^&*...).','password');return}
+
+      // Create user
+      const name=`${firstName} ${lastName}`;
+      App.data.users.push({
+        id:++App.nextId.user,
+        name,
+        firstName,
+        lastName,
+        username:email,
+        email,
+        phone:`${countryCode} ${phone}`,
+        password:pass,
+        role
+      });
+
+      App.navigate('users');
+    };
+
+    card.append(submitBtn);
+
+    // Back link to users
+    const backRow=el('div',{style:{textAlign:'center',fontSize:'.82rem',color:'var(--text2)'}});
+    const backBtn=el('button',{style:{background:'transparent',border:'none',color:'var(--accent)',fontWeight:'500',fontSize:'.82rem',cursor:'pointer',textDecoration:'underline',padding:'0'}},['Volver a usuarios']);
+    backBtn.onclick=()=>App.navigate('users');
+    backRow.append(backBtn);
+    card.append(backRow);
+
+    this.append(card);
+  }
+}
+customElements.define('admin-register-screen',AdminRegisterScreen);
 
 // ─── APP SHELL ───────────────────────────────────────────────────────────────
 class AppShell extends HTMLElement {
   connectedCallback(){this.style.cssText='display:contents';this.render();App.on(()=>this.update())}
   get items(){
-    const a=[{id:'map',icon:'🗺️',label:'Mapa'},{id:'equipment',icon:'🔧',label:'Equipos'},{id:'dispatches',icon:'📦',label:'Despachos'}];
-    if(App.isAdmin()) a.push({id:'locations',icon:'📍',label:'Lugares'});
-    return a;
+    const role=App.user?.role;
+    if(role==='driver')  return [{id:'mytrips',icon:'🚚',label:'Mis Viajes'}];
+    if(role==='viewer')  return [{id:'map',icon:'🗺️',label:'Mapa'},{id:'dispatches',icon:'📦',label:'Despachos'},{id:'equipment',icon:'🔧',label:'Equipos'}];
+    if(role==='deposito')return [{id:'map',icon:'🗺️',label:'Mapa'},{id:'dispatches',icon:'📦',label:'Despachos'},{id:'locations',icon:'📍',label:'Lugares'},{id:'equipment',icon:'🔧',label:'Equipos'}];
+    // admin
+    return [{id:'map',icon:'🗺️',label:'Mapa'},{id:'dispatches',icon:'📦',label:'Despachos'},{id:'locations',icon:'📍',label:'Lugares'},{id:'equipment',icon:'🔧',label:'Equipos'},{id:'users',icon:'👥',label:'Usuarios'}];
   }
   render(){
     this.innerHTML='';
@@ -353,7 +1089,7 @@ class AppShell extends HTMLElement {
     this._nav=nav;
     const ua=el('div',{class:'sidebar-user',style:{padding:'.75rem',borderTop:'1px solid var(--border)',flexShrink:'0'}});
     const uname=el('div',{class:'sidebar-user-name',style:{fontWeight:'500',fontSize:'.85rem',marginBottom:'.3rem'}},[App.user?.name||'']);
-    const rb=badge(App.isAdmin()?'Admin':'Viewer',App.isAdmin()?'#7c6af7':'#22c87a'); rb.className+=' sidebar-role';
+    const rb=badge(App.roleLabel(App.user?.role),App.roleColor(App.user?.role)); rb.className+=' sidebar-role';
     const lbf=el('button',{class:'btn sidebar-logout-full',style:{marginTop:'.45rem',fontSize:'.76rem',padding:'.3rem .65rem'}},['Cerrar sesión']); lbf.onclick=()=>App.logout();
     const lbi=el('button',{style:{display:'none',background:'transparent',border:'none',color:'var(--text3)',fontSize:'1.2rem',cursor:'pointer',width:'100%',textAlign:'center',marginTop:'.15rem',lineHeight:'1'},class:'sidebar-logout-icon',title:'Cerrar sesión'},['↩']); lbi.onclick=()=>App.logout();
     ua.append(uname,rb,el('br'),lbf,lbi); sb.append(logoArea,nav,ua);
@@ -382,7 +1118,7 @@ class AppShell extends HTMLElement {
   _renderView(){
     if(!this.contentEl) return;
     this.contentEl.innerHTML='';
-    const tags={map:'map-view',equipment:'equipment-view',dispatches:'dispatches-view',locations:'locations-view'};
+    const tags={map:'map-view',equipment:'equipment-view',dispatches:'dispatches-view',locations:'locations-view',users:'users-view',mytrips:'mytrips-view'};
     this.contentEl.append(document.createElement(tags[App.view]||'map-view'));
   }
 }
@@ -415,14 +1151,9 @@ class MapView extends HTMLElement {
       panelOpen=!panelOpen;
       toggle.querySelector('#ptarr').textContent=panelOpen?'▼':'▶';
       if(window.innerWidth<=640){
-        if(!panelOpen){
-          panel.classList.add('hidden');
-          mapDiv.classList.add('expanded');
-        } else {
-          panel.classList.remove('hidden');
-          mapDiv.classList.remove('expanded');
-        }
-        setTimeout(()=>{ if(this._map) this._map.invalidateSize() },280);
+        if(!panelOpen) panel.classList.add('hidden');
+        else panel.classList.remove('hidden');
+        setTimeout(()=>{ if(this._map) this._map.invalidateSize() },230);
       }
     };
 
@@ -440,6 +1171,20 @@ class MapView extends HTMLElement {
       card.onclick=()=>{if(this._map&&this._markers?.[loc.id]){this._map.setView([loc.lat,loc.lng],15,{animate:true});this._markers[loc.id].openPopup()}};
       panel.append(card);
     });
+
+    // "Mi ubicación" card — shown only when geolocation is available
+    if(App.userLocation){
+      const {lat,lng}=App.userLocation;
+      const myCard=el('div',{style:{background:'rgba(59,192,247,.08)',border:'1px solid rgba(59,192,247,.25)',borderRadius:'var(--radius)',padding:'.65rem',marginTop:'.35rem',cursor:'pointer'}});
+      myCard.onmouseenter=()=>myCard.style.borderColor='rgba(59,192,247,.5)';
+      myCard.onmouseleave=()=>myCard.style.borderColor='rgba(59,192,247,.25)';
+      const myTop=el('div',{style:{display:'flex',alignItems:'center',gap:'.4rem',marginBottom:'.15rem'}});
+      myTop.append(el('span',{style:{width:'8px',height:'8px',borderRadius:'50%',background:'#3bc0f7',display:'inline-block',flexShrink:'0'}},[]),el('span',{style:{fontWeight:'600',fontSize:'.85rem',color:'#3bc0f7'}},['📍 Mi ubicación']));
+      const myCoords=el('p',{style:{color:'var(--text2)',fontSize:'.73rem'}},[`${lat.toFixed(5)}, ${lng.toFixed(5)}`]);
+      myCard.append(myTop,myCoords);
+      myCard.onclick=()=>{if(this._map&&this._userMarker){this._map.setView([lat,lng],16,{animate:true});this._userMarker.openPopup()}};
+      panel.append(myCard);
+    }
 
     body.append(mapDiv,panel);
     outer.append(toggle,body,spacer);
@@ -459,21 +1204,72 @@ class MapView extends HTMLElement {
     this._map=map; this._markers={};
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | © <a href="https://carto.com/">CARTO</a>',subdomains:'abcd',maxZoom:19}).addTo(map);
     App.data.dispatches.forEach(d=>{
-      const from=locs.find(l=>l.id===d.origin),to=locs.find(l=>l.id===d.destination);
-      if(!from||!to) return;
-      L.polyline([[from.lat,from.lng],[to.lat,to.lng]],{color:d.dateEnd>=today()?'#7c6af7':'#444',weight:2.5,opacity:.65,dashArray:'8,6'}).addTo(map);
+      const from=locs.find(l=>l.id===d.origin);
+      if(!from) return;
+      const active=d.dateEnd>=today();
+      let prev=from;
+      (d.stops||[]).forEach(s=>{
+        const to=locs.find(l=>l.id===s.locationId);
+        if(!to) return;
+        L.polyline([[prev.lat,prev.lng],[to.lat,to.lng]],{color:active?'#7c6af7':'#444',weight:active?2.5:1.5,opacity:active?.7:.4,dashArray:'8,6'}).addTo(map);
+        prev=to;
+      });
     });
     locs.forEach(loc=>{
       const icon=L.divIcon({className:'',html:`<div style="width:32px;height:32px;border-radius:50%;background:${loc.color}33;border:2.5px solid ${loc.color};display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px ${loc.color}55"><div style="width:10px;height:10px;border-radius:50%;background:${loc.color}"></div></div>`,iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-18]});
-      const t=today(),active=App.data.dispatches.filter(d=>d.destination===loc.id&&d.dateEnd>=t);
-      const eqH=active.length?active.map(d=>d.items.map(it=>{const eq=App.data.equipment.find(e=>e.id===it.equipId);return`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="font-size:12px">${eq?.name||'?'}</span><span style="font-size:12px;color:${loc.color};font-weight:600;margin-left:8px">${it.qty}×</span></div>`}).join('')).join(''):`<p style="color:#6a6a7a;font-size:12px;margin-top:4px">Sin equipos activos</p>`;
+      const t=today();
+      const activeStopItems=App.data.dispatches
+        .filter(d=>d.dateStart<=t&&d.dateEnd>=t)
+        .flatMap(d=>(d.stops||[]).filter(s=>s.locationId===loc.id).flatMap(s=>s.items||[]));
+      const eqH=activeStopItems.length
+        ? activeStopItems.map(it=>{const eq=App.data.equipment.find(e=>e.id===it.equipId);return`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.07)"><span style="font-size:12px">${eq?.name||'?'}</span><span style="font-size:12px;color:${loc.color};font-weight:600;margin-left:8px">${it.qty}×</span></div>`}).join('')
+        :`<p style="color:#6a6a7a;font-size:12px;margin-top:4px">Sin equipos activos</p>`;
       const popup=`<div style="min-width:175px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="width:9px;height:9px;border-radius:50%;background:${loc.color};display:inline-block;flex-shrink:0"></span><strong style="font-size:13px">${loc.name}</strong></div><p style="color:#a0a0b0;font-size:12px;margin-bottom:7px">${loc.address}</p><div style="font-size:10px;color:#6a6a7a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Equipos activos</div>${eqH}</div>`;
       const marker=L.marker([loc.lat,loc.lng],{icon}).addTo(map).bindPopup(popup,{className:'st-popup',maxWidth:250});
       marker.on('click',()=>this.showDetail(loc)); this._markers[loc.id]=marker;
     });
     if(locs.length>1) map.fitBounds(L.latLngBounds(locs.map(l=>[l.lat,l.lng])),{padding:[40,40]});
+
+    // Place user's own location marker if already available
+    this._addUserMarker(map);
+
+    // Also update marker if geolocation arrives after map is drawn
+    App.on(()=>this._addUserMarker(map));
   }
-  showDetail(loc){const m=document.createElement('map-detail-modal');m.loc=loc;this.append(m)}
+
+  _addUserMarker(map){
+    if(!App.userLocation) return;
+    const {lat,lng}=App.userLocation;
+
+    // Remove previous user marker if any
+    if(this._userMarker){ this._userMarker.remove(); this._userMarker=null; }
+
+    const pulseHtml=`
+      <div style="position:relative;width:36px;height:36px">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#3bc0f744;border:2.5px solid #3bc0f7;animation:userPulse 1.8s ease-out infinite"></div>
+        <div style="position:absolute;inset:9px;border-radius:50%;background:#3bc0f7;box-shadow:0 0 8px #3bc0f7aa"></div>
+      </div>`;
+    const icon=L.divIcon({className:'',html:pulseHtml,iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});
+    const name=App.user?.name||'Mi ubicación';
+    const popup=`<div style="min-width:140px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">
+        <span style="width:9px;height:9px;border-radius:50%;background:#3bc0f7;display:inline-block;flex-shrink:0"></span>
+        <strong style="font-size:13px">${name}</strong>
+      </div>
+      <p style="color:#a0a0b0;font-size:12px">${lat.toFixed(5)}, ${lng.toFixed(5)}</p>
+    </div>`;
+    this._userMarker=L.marker([lat,lng],{icon,zIndexOffset:500})
+      .addTo(map).bindPopup(popup,{className:'st-popup',maxWidth:220});
+
+    // Add pulse keyframes once
+    if(!document.getElementById('user-pulse-style')){
+      const s=document.createElement('style');
+      s.id='user-pulse-style';
+      s.textContent=`@keyframes userPulse{0%{transform:scale(1);opacity:.7}70%{transform:scale(2);opacity:0}100%{transform:scale(2);opacity:0}}`;
+      document.head.append(s);
+    }
+  }
+  showDetail(loc){const m=document.createElement('map-detail-modal');m.loc=loc;document.body.append(m)}
 }
 customElements.define('map-view',MapView);
 
@@ -481,22 +1277,167 @@ class MapDetailModal extends HTMLElement {
   connectedCallback(){
     this.className='modal-overlay';
     const loc=this.loc;
-    const box=el('div',{class:'modal-box sm'});
-    const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}});
-    const ttl=el('div',{style:{display:'flex',alignItems:'center',gap:'.5rem'}});
-    ttl.append(el('span',{style:{width:'11px',height:'11px',borderRadius:'50%',background:loc.color,display:'inline-block'}},[]),el('h3',{style:{fontSize:'.98rem',fontWeight:'600'}},[loc.name]));
-    const cls=el('button',{style:{background:'transparent',border:'none',color:'var(--text2)',fontSize:'1.3rem',padding:'.1rem .3rem',lineHeight:'1'}},['×']);cls.onclick=()=>this.remove();
-    top.append(ttl,cls);
-    box.append(top,el('p',{style:{color:'var(--text2)',fontSize:'.83rem',marginBottom:'.65rem'}},[loc.address]),badge(loc.type==='deposito'?'Depósito':'Lugar de show',loc.color));
-    const t=today(),active=App.data.dispatches.filter(d=>d.destination===loc.id&&d.dateEnd>=t);
-    box.append(el('h4',{style:{marginTop:'.9rem',marginBottom:'.45rem',fontSize:'.76rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em'}},['Equipos activos aquí']));
-    if(!active.length) box.append(el('p',{style:{color:'var(--text3)',fontSize:'.83rem'}},['Sin despachos activos']));
-    active.forEach(d=>{
-      const r=el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.6rem',marginBottom:'.35rem',border:'1px solid var(--border)'}});
-      r.innerHTML=`<div style="font-weight:500;font-size:.83rem;margin-bottom:.2rem">${d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(', ')}</div><div style="font-size:.76rem;color:var(--text2)">Conductor: ${d.driver} · Hasta ${fmt(d.dateEnd)}</div>`;
-      box.append(r);
+    const now=new Date().toISOString().slice(0,16);
+
+    // Despachos activos AHORA donde esta loc es una de las paradas
+    const activeNow=App.data.dispatches.filter(d=>
+      d.dateStart<=now && d.dateEnd>=now &&
+      (d.stops||[]).some(s=>s.locationId===loc.id)
+    );
+    // Despachos futuros donde esta loc es una de las paradas
+    const upcoming=App.data.dispatches.filter(d=>
+      d.dateStart>now &&
+      (d.stops||[]).some(s=>s.locationId===loc.id)
+    );
+
+    // Equipo que llegó a ESTE lugar específicamente (items de la parada correspondiente)
+    const arrivedMap=new Map();
+    activeNow.forEach(d=>{
+      (d.stops||[]).filter(s=>s.locationId===loc.id).forEach(s=>{
+        s.items.forEach(it=>arrivedMap.set(it.equipId,(arrivedMap.get(it.equipId)||0)+it.qty));
+      });
     });
-    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+
+    // ── Para el depósito: calcular lo que está AHÍ = total − lo que está en campo ahora ──
+    const isDeposito=loc.type==='deposito';
+    let depositoMap=new Map(); // equipId → qty en depósito ahora
+    if(isDeposito){
+      const outNow=new Map();
+      App.data.dispatches.filter(d=>d.dateStart<=now&&d.dateEnd>=now)
+        .forEach(d=>allItems(d).forEach(it=>outNow.set(it.equipId,(outNow.get(it.equipId)||0)+it.qty)));
+      App.data.equipment.forEach(eq=>{
+        const inField=outNow.get(eq.id)||0;
+        const inDeposit=eq.quantity-inField;
+        if(inDeposit>0) depositoMap.set(eq.id,inDeposit);
+      });
+    }
+
+    const displayMap=isDeposito ? depositoMap : arrivedMap;
+
+    const box=el('div',{class:'modal-box sm'});
+
+    // ── Header ──
+    const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.65rem'}});
+    const ttl=el('div',{style:{display:'flex',alignItems:'center',gap:'.5rem'}});
+    ttl.append(
+      el('span',{style:{width:'11px',height:'11px',borderRadius:'50%',background:loc.color,display:'inline-block'}},[]),
+      el('h3',{style:{fontSize:'.98rem',fontWeight:'600'}},[loc.name])
+    );
+    const cls=el('button',{style:{background:'transparent',border:'none',color:'var(--text2)',fontSize:'1.3rem',padding:'.1rem .3rem',lineHeight:'1',cursor:'pointer'}},['×']);
+    cls.onclick=()=>this.remove();
+    top.append(ttl,cls);
+    box.append(top);
+    box.append(el('p',{style:{color:'var(--text2)',fontSize:'.8rem',marginBottom:'.55rem'}},[loc.address]));
+
+    const typeRow=el('div',{style:{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.85rem'}});
+    typeRow.append(badge(loc.type==='deposito'?'Depósito':'Lugar de show',loc.color));
+    const nowLabel=el('span',{style:{fontSize:'.72rem',color:'var(--text3)',marginLeft:'auto'}},
+      ['Ahora: '+new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})]);
+    typeRow.append(nowLabel);
+    box.append(typeRow);
+
+    // ── Sección principal de equipos ──
+    const sectionLabel=isDeposito ? 'Equipo en depósito ahora' : 'Equipos presentes ahora';
+    box.append(el('h4',{style:{fontSize:'.75rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.4rem'}},[sectionLabel]));
+
+    if(displayMap.size===0){
+      const emptyMsg=isDeposito
+        ? 'Todo el equipo se encuentra fuera del depósito en este momento'
+        : 'Sin equipos en este lugar ahora mismo';
+      box.append(el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.75rem',marginBottom:'.75rem',fontSize:'.83rem',color:'var(--text3)',textAlign:'center'}},[emptyMsg]));
+    } else {
+      const totalUnits=[...displayMap.values()].reduce((s,v)=>s+v,0);
+      const totalTypes=displayMap.size;
+
+      // Summary pill
+      const summaryRow=el('div',{style:{background:loc.color+'18',border:`1px solid ${loc.color}44`,borderRadius:'8px',padding:'.55rem .75rem',marginBottom:'.5rem',display:'flex',alignItems:'center',justifyContent:'space-between'}});
+      summaryRow.innerHTML=`<span style="font-size:.82rem;font-weight:500;color:var(--text)">${totalTypes} tipo(s) de equipo</span><span style="font-size:.82rem;font-weight:700;color:${loc.color}">${totalUnits} unidad(es)</span>`;
+      box.append(summaryRow);
+
+      // Collapsible full list
+      const listWrap=el('div',{style:{display:'none',marginBottom:'.6rem'}});
+
+      // Group by category
+      const byCategory=new Map();
+      displayMap.forEach((qty,equipId)=>{
+        const eq=App.data.equipment.find(e=>e.id===equipId);
+        if(!eq) return;
+        if(!byCategory.has(eq.category)) byCategory.set(eq.category,[]);
+        byCategory.get(eq.category).push({eq,qty});
+      });
+
+      byCategory.forEach((items,cat)=>{
+        const c=catColor(cat);
+        const catHeader=el('div',{style:{fontSize:'.7rem',fontWeight:'600',color:c,textTransform:'uppercase',letterSpacing:'.05em',padding:'.45rem 0 .2rem'}});
+        catHeader.textContent=cat;
+        listWrap.append(catHeader);
+        items.forEach(({eq,qty})=>{
+          const row=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.45rem .65rem',background:'var(--bg3)',borderRadius:'7px',marginBottom:'.28rem'}});
+          row.innerHTML=`<span style="font-size:.83rem">${eq.name}</span><span style="font-weight:700;font-size:.88rem;color:${c}">${qty}×</span>`;
+          listWrap.append(row);
+        });
+      });
+
+      // For non-depot: show source dispatches
+      if(!isDeposito && activeNow.length){
+        const srcTitle=el('div',{style:{fontSize:'.7rem',color:'var(--text3)',marginTop:'.5rem',marginBottom:'.3rem'}},['Despachos activos en este lugar:']);
+        listWrap.append(srcTitle);
+        activeNow.forEach(d=>{
+          const orig=App.data.locations.find(l=>l.id===d.origin);
+          const row=el('div',{style:{fontSize:'.76rem',color:'var(--text2)',padding:'.3rem .5rem',background:'var(--bg3)',borderRadius:'6px',marginBottom:'.25rem'}});
+          row.innerHTML=`<span style="color:var(--text3)">Desde:</span> ${orig?.name||'?'} · <span style="color:var(--text3)">Hasta:</span> ${fmt(d.dateEnd)} · <span style="color:var(--text3)">Conductor:</span> ${d.driver}`;
+          listWrap.append(row);
+        });
+      }
+
+      // For depot: show what's currently out in field
+      if(isDeposito){
+        const outNow=new Map();
+        App.data.dispatches.filter(d=>d.dateStart<=now&&d.dateEnd>=now)
+          .forEach(d=>allItems(d).forEach(it=>outNow.set(it.equipId,(outNow.get(it.equipId)||0)+it.qty)));
+        const totalOut=[...outNow.values()].reduce((s,v)=>s+v,0);
+        if(totalOut>0){
+          const outTitle=el('div',{style:{fontSize:'.7rem',color:'var(--text3)',marginTop:'.6rem',marginBottom:'.3rem'}},[`Equipo fuera del depósito ahora (${totalOut} unidad(es)):`]);
+          listWrap.append(outTitle);
+          outNow.forEach((qty,equipId)=>{
+            const eq=App.data.equipment.find(e=>e.id===equipId);
+            if(!eq) return;
+            const c=catColor(eq.category);
+            const row=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.4rem .65rem',background:'var(--bg3)',borderRadius:'7px',marginBottom:'.25rem',opacity:'.7'}});
+            row.innerHTML=`<span style="font-size:.82rem;color:var(--text2)">${eq.name}</span><span style="font-weight:600;font-size:.85rem;color:var(--amber)">${qty}× fuera</span>`;
+            listWrap.append(row);
+          });
+        }
+      }
+
+      // Toggle button — starts expanded for depósito
+      let expanded=isDeposito;
+      listWrap.style.display=expanded?'block':'none';
+      const toggleBtn=el('button',{class:'btn',style:{width:'100%',textAlign:'center',fontSize:'.8rem',marginBottom:'.65rem'}},
+        [expanded?'Ocultar listado ▲':'Ver listado completo de equipos ▼']);
+      toggleBtn.onclick=()=>{
+        expanded=!expanded;
+        listWrap.style.display=expanded?'block':'none';
+        toggleBtn.textContent=expanded?'Ocultar listado ▲':'Ver listado completo de equipos ▼';
+      };
+      box.append(toggleBtn,listWrap);
+    }
+
+    if(upcoming.length){
+      box.append(el('h4',{style:{fontSize:'.75rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.4rem',marginTop:'.2rem'}},['Próximos despachos a este lugar']));
+      upcoming.slice(0,3).forEach(d=>{
+        const orig=App.data.locations.find(l=>l.id===d.origin);
+        const stopItems=(d.stops||[]).filter(s=>s.locationId===loc.id).flatMap(s=>s.items||[]);
+        const totalU=stopItems.reduce((s,it)=>s+it.qty,0);
+        const row=el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.55rem .65rem',marginBottom:'.3rem',border:'1px solid var(--border)'}});
+        row.innerHTML=`<div style="font-size:.82rem;font-weight:500;margin-bottom:.2rem">Desde ${orig?.name||'?'} · ${totalU} unidad(es)</div><div style="font-size:.75rem;color:var(--text2)">Llega: ${fmt(d.dateStart)} · Conductor: ${d.driver}</div>`;
+        box.append(row);
+      });
+      if(upcoming.length>3) box.append(el('div',{style:{fontSize:'.73rem',color:'var(--text3)',textAlign:'center',padding:'.25rem 0'}},[`+${upcoming.length-3} despacho(s) más`]));
+    }
+
+    this.onclick=e=>{if(e.target===this)this.remove()};
+    this.append(box);
   }
 }
 customElements.define('map-detail-modal',MapDetailModal);
@@ -506,7 +1447,7 @@ class EquipmentView extends HTMLElement {
   connectedCallback(){this.filterCat='all';this.render()}
   render(){
     this.innerHTML='';
-    const isAdmin=App.isAdmin();
+    const isAdmin=App.canEdit();
     const header=el('div',{class:'view-header'});
     header.innerHTML=`<h2>🔧 Inventario de Equipos</h2>`;
     if(isAdmin){const b=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Agregar']);b.onclick=()=>this.openForm(null);header.append(b)}
@@ -580,13 +1521,15 @@ class EquipmentView extends HTMLElement {
     });
     this.append(mc);
   }
-  inField(eq){return App.data.dispatches.filter(d=>d.dateEnd>=today()).flatMap(d=>d.items).filter(it=>it.equipId===eq.id).reduce((s,it)=>s+it.qty,0)}
+  inField(eq){return App.data.dispatches.filter(d=>d.dateEnd>=today()).flatMap(allItems).filter(it=>it.equipId===eq.id).reduce((s,it)=>s+it.qty,0)}
   openForm(eq){const m=document.createElement('equipment-form-modal');m.equipment=eq;m.onSave=()=>this.render();this.append(m)}
 }
 customElements.define('equipment-view',EquipmentView);
 
 class EquipmentFormModal extends HTMLElement {
   connectedCallback(){
+    // Double-guard: only deposito/admin can edit equipment
+    if(!App.canEdit()){this.remove();return}
     this.className='modal-overlay';
     const eq=this.equipment,isEdit=!!eq;
     const box=el('div',{class:'modal-box sm'});
@@ -594,7 +1537,7 @@ class EquipmentFormModal extends HTMLElement {
     box.append(ffInput('Nombre','ef-name','text',eq?.name||''));
     box.append(ffInput('Modelo','ef-model','text',eq?.model||''));
     box.append(ffSelect('Categoría','ef-cat',App.data.categories.map(c=>({v:c,l:c})),eq?.category||App.data.categories[0]));
-    box.append(ffInput('Cantidad total','ef-qty','number',eq?.quantity??1,{min:'0'}));
+    box.append(ffInput('Cantidad total en inventario','ef-qty','number',eq?.quantity??1,{min:'0'}));
     const footer=el('div',{class:'modal-footer'});
     const cancel=el('button',{class:'btn'},['Cancelar']);cancel.onclick=()=>this.remove();
     const save=el('button',{class:'btn btn-primary'},['Guardar']);
@@ -811,7 +1754,7 @@ class DispatchesView extends HTMLElement {
   connectedCallback(){this.render()}
   render(){
     this.innerHTML='';
-    const isAdmin=App.isAdmin();
+    const isAdmin=App.canEdit();
     const header=el('div',{class:'view-header'});
     header.innerHTML=`<h2>📦 Despachos de Equipos</h2>`;
     if(isAdmin){const b=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Nuevo']);b.onclick=()=>this.openForm();header.append(b)}
@@ -820,25 +1763,29 @@ class DispatchesView extends HTMLElement {
     const list=el('div',{class:'dispatch-list'});
     [...App.data.dispatches].reverse().forEach(d=>{
       const orig=App.data.locations.find(l=>l.id===d.origin);
-      const dest=App.data.locations.find(l=>l.id===d.destination);
       const isActive=d.dateEnd>=today();
       const card=el('div',{class:'dispatch-card'});
       const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.5rem',gap:'.5rem'}});
       const route=el('div',{style:{minWidth:0,flex:'1'}});
-      route.innerHTML=`<div style="font-weight:600;font-size:.9rem;margin-bottom:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${orig?.name||'?'} → ${dest?.name||'?'}</div><div style="font-size:.76rem;color:var(--text2)">${fmt(d.dateStart)} — ${fmt(d.dateEnd)}</div>`;
+      route.innerHTML=`<div style="font-weight:600;font-size:.9rem;margin-bottom:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${routeLabel(d)}</div><div style="font-size:.76rem;color:var(--text2)">${fmt(d.dateStart)} — ${fmt(d.dateEnd)}</div>`;
       const sb=badge(isActive?'Activo':'Finalizado',isActive?'#22c87a':'#888');sb.style.flexShrink='0';
       top.append(route,sb);
-      const eqRow=el('div',{style:{fontSize:'.82rem',color:'var(--text2)',marginBottom:'.45rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(' · ')]);
+      const allEq=allItems(d);
+      const eqRow=el('div',{style:{fontSize:'.82rem',color:'var(--text2)',marginBottom:'.45rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[allEq.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(' · ')]);
+      const stopsCount=el('div',{style:{fontSize:'.76rem',color:'var(--text3)',marginBottom:'.4rem'}}, [`${(d.stops||[]).length} parada(s)`]);
       const meta=el('div',{style:{display:'flex',gap:'.85rem',fontSize:'.76rem',color:'var(--text3)',borderTop:'1px solid var(--border)',paddingTop:'.5rem',flexWrap:'wrap'}});
       meta.innerHTML=`<span>👤 ${d.generatedBy}</span><span>🚚 ${d.driver}</span>`;
       const acts=el('div',{class:'dispatch-actions'});
       const vb=el('button',{class:'btn',style:{fontSize:'.79rem'}},['Ver detalle']);vb.onclick=()=>this.showDetail(d);acts.append(vb);
-      if(isAdmin){const db=el('button',{class:'btn btn-danger',style:{fontSize:'.79rem'}},['Eliminar']);db.onclick=e2=>{e2.stopPropagation();if(confirm('¿Eliminar este despacho?')){App.data.dispatches=App.data.dispatches.filter(x=>x.id!==d.id);this.render()}};acts.append(db)}
-      card.append(top,eqRow,meta,acts);list.append(card);
+      if(isAdmin){
+        const eb=el('button',{class:'btn',style:{fontSize:'.79rem'}},['✏️ Editar']);eb.onclick=()=>this.openForm(d);acts.append(eb);
+        const db=el('button',{class:'btn btn-danger',style:{fontSize:'.79rem'}},['Eliminar']);db.onclick=e2=>{e2.stopPropagation();if(confirm('¿Eliminar este despacho?')){App.data.dispatches=App.data.dispatches.filter(x=>x.id!==d.id);this.render()}};acts.append(db);
+      }
+      card.append(top,eqRow,stopsCount,meta,acts);list.append(card);
     });
     this.append(list);
   }
-  openForm(){const m=document.createElement('dispatch-form-modal');m.onSave=()=>this.render();this.append(m)}
+  openForm(d=null){const m=document.createElement('dispatch-form-modal');m.dispatch=d;m.onSave=()=>this.render();this.append(m)}
   showDetail(d){const m=document.createElement('dispatch-detail-modal');m.dispatch=d;this.append(m)}
 }
 customElements.define('dispatches-view',DispatchesView);
@@ -848,33 +1795,55 @@ class DispatchDetailModal extends HTMLElement {
     this.className='modal-overlay';
     const d=this.dispatch;
     const orig=App.data.locations.find(l=>l.id===d.origin);
-    const dest=App.data.locations.find(l=>l.id===d.destination);
     const isActive=d.dateEnd>=today();
     const box=el('div',{class:'modal-box'});
+    // Header
     const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.85rem'}});
     top.append(el('h3',{style:{fontSize:'.97rem',fontWeight:'600'}},['Detalle del Despacho']));
     const cls=el('button',{style:{background:'transparent',border:'none',color:'var(--text2)',fontSize:'1.3rem',padding:'.1rem .3rem',lineHeight:'1'}},['×']);cls.onclick=()=>this.remove();top.append(cls);
+    // Meta grid
     const ig=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.6rem',marginBottom:'.85rem'}});
     const ii=(l,v,c)=>{const d2=el('div',{style:{background:'var(--bg3)',borderRadius:'8px',padding:'.55rem .65rem'}});d2.innerHTML=`<div style="font-size:.68rem;color:var(--text3);margin-bottom:.15rem">${l}</div><div style="font-weight:500;font-size:.83rem;color:${c||'var(--text)'};">${v}</div>`;return d2};
-    ig.append(ii('Origen',orig?.name||'?'),ii('Destino',dest?.name||'?'),ii('Inicio',fmt(d.dateStart)),ii('Fin',fmt(d.dateEnd),isActive?'var(--green)':'var(--text2)'),ii('Generó',d.generatedBy),ii('Conductor',d.driver));
+    ig.append(ii('Origen',orig?.name||'?'),ii('Paradas',(d.stops||[]).length+''),ii('Inicio',fmt(d.dateStart)),ii('Fin',fmt(d.dateEnd),isActive?'var(--green)':'var(--text2)'),ii('Generó',d.generatedBy),ii('Conductor',d.driver));
     box.append(top,ig);
-    box.append(el('h4',{style:{fontSize:'.74rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.45rem'}},['Equipos despachados']));
-    const eqList=el('div',{style:{marginBottom:'.85rem'}});
-    d.items.forEach(it=>{
-      const eq=App.data.equipment.find(e=>e.id===it.equipId);
-      const row=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.5rem .65rem',background:'var(--bg3)',borderRadius:'8px',marginBottom:'.3rem'}});
-      row.innerHTML=`<span style="font-size:.83rem">${eq?.name||'?'}</span><div style="display:flex;align-items:center;gap:.45rem"><span style="font-size:.73rem;color:var(--text2)">${eq?.category||''}</span><span style="font-weight:600;color:var(--amber)">${it.qty}×</span></div>`;
-      eqList.append(row);
+    // Route visual
+    const routeWrap=el('div',{style:{marginBottom:'.85rem'}});
+    routeWrap.append(el('div',{style:{fontSize:'.74rem',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem'}},['Recorrido']));
+    const stops=d.stops||[];
+    const allLocs=[{locationId:d.origin,isOrigin:true},...stops.map(s=>({locationId:s.locationId,items:s.items}))];
+    allLocs.forEach((stop,i)=>{
+      const loc=App.data.locations.find(l=>l.id===stop.locationId);
+      const stopRow=el('div',{style:{display:'flex',gap:'.6rem',alignItems:'flex-start',marginBottom:'.2rem'}});
+      const iconCol=el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',width:'20px',flexShrink:'0'}});
+      const dot=el('div',{style:{width:'12px',height:'12px',borderRadius:'50%',background:loc?.color||'#888',border:'2px solid '+(loc?.color||'#888')+'88',flexShrink:'0',marginTop:'3px'}});
+      iconCol.append(dot);
+      if(i<allLocs.length-1){const line=el('div',{style:{width:'2px',flex:'1',background:'var(--border2)',margin:'.2rem auto',minHeight:'18px'}});iconCol.append(line)}
+      const info=el('div',{style:{flex:'1',paddingBottom:'.4rem'}});
+      const locName=el('div',{style:{fontWeight:'500',fontSize:'.85rem'}},[(stop.isOrigin?'🚦 ':'')+( loc?.name||'?')]);
+      info.append(locName);
+      if(!stop.isOrigin&&stop.items?.length){
+        const eqLine=el('div',{style:{fontSize:'.76rem',color:'var(--text2)',marginTop:'.15rem'}});
+        eqLine.textContent=stop.items.map(it=>{const eq=App.data.equipment.find(e=>e.id===it.equipId);return`${it.qty}× ${eq?.name||'?'}`}).join(' · ');
+        info.append(eqLine);
+      }
+      stopRow.append(iconCol,info);
+      routeWrap.append(stopRow);
     });
+    box.append(routeWrap);
+    // Print button
     const printBtn=el('button',{class:'btn btn-primary',style:{width:'100%',textAlign:'center'}},['🖨️ Imprimir / Exportar']);
-    printBtn.onclick=()=>this.doPrint(d,orig,dest);
-    box.append(eqList,printBtn);
+    printBtn.onclick=()=>this.doPrint(d,orig);
+    box.append(printBtn);
     this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
   }
-  doPrint(d,orig,dest){
-    const t=today();
-    const eq=d.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`<tr><td>${e?.name||'?'}</td><td>${e?.category||''}</td><td>${it.qty}</td></tr>`}).join('');
-    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho #${d.id}</title><style>body{font-family:sans-serif;padding:2rem;color:#111}h1{font-size:1.35rem;margin-bottom:.25rem}table{width:100%;border-collapse:collapse;margin-top:1rem}th,td{border:1px solid #ddd;padding:.5rem .75rem;text-align:left}th{background:#f0f0f0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin:1rem 0}.meta-item{border:1px solid #ddd;border-radius:6px;padding:.55rem}.meta-item label{font-size:.7rem;color:#888;display:block;margin-bottom:.2rem}@media print{body{padding:1rem}}</style></head><body><h1>Despacho de Equipos #${d.id}</h1><p style="color:#888;font-size:.83rem;margin-bottom:1rem">Generado: ${new Date().toLocaleString('es-AR')} · SoundTrack</p><div class="meta"><div class="meta-item"><label>Origen</label><strong>${orig?.name||'?'}</strong></div><div class="meta-item"><label>Destino</label><strong>${dest?.name||'?'}</strong></div><div class="meta-item"><label>Fecha y hora de inicio</label>${fmt(d.dateStart)}</div><div class="meta-item"><label>Fecha y hora de fin</label>${fmt(d.dateEnd)}</div><div class="meta-item"><label>Generó</label>${d.generatedBy}</div><div class="meta-item"><label>Conductor</label>${d.driver}</div></div><table><thead><tr><th>Equipo</th><th>Categoría</th><th>Cantidad</th></tr></thead><tbody>${eq}</tbody></table></body></html>`;
+  doPrint(d,orig){
+    const stops=d.stops||[];
+    const stopsHtml=stops.map((s,i)=>{
+      const loc=App.data.locations.find(l=>l.id===s.locationId);
+      const eqRows=s.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`<tr><td>${e?.name||'?'}</td><td>${e?.category||''}</td><td>${it.qty}</td></tr>`}).join('');
+      return`<h3 style="margin-top:1.25rem;font-size:1rem">Parada ${i+1}: ${loc?.name||'?'}</h3><table><thead><tr><th>Equipo</th><th>Categoría</th><th>Cantidad</th></tr></thead><tbody>${eqRows}</tbody></table>`;
+    }).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Despacho #${d.id}</title><style>body{font-family:sans-serif;padding:2rem;color:#111}h1{font-size:1.35rem;margin-bottom:.25rem}h3{font-size:1rem;margin:.75rem 0 .35rem}table{width:100%;border-collapse:collapse;margin-top:.35rem}th,td{border:1px solid #ddd;padding:.45rem .65rem;text-align:left}th{background:#f0f0f0}.meta{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0}.meta-item{border:1px solid #ddd;border-radius:6px;padding:.5rem}.meta-item label{font-size:.7rem;color:#888;display:block;margin-bottom:.15rem}@media print{body{padding:1rem}}</style></head><body><h1>Despacho de Equipos #${d.id}</h1><p style="color:#888;font-size:.83rem;margin-bottom:.75rem">Generado: ${new Date().toLocaleString('es-AR')} · SoundTrack</p><div class="meta"><div class="meta-item"><label>Origen</label><strong>${orig?.name||'?'}</strong></div><div class="meta-item"><label>Paradas</label><strong>${stops.length}</strong></div><div class="meta-item"><label>Fecha y hora de inicio</label>${fmt(d.dateStart)}</div><div class="meta-item"><label>Fecha y hora de fin</label>${fmt(d.dateEnd)}</div><div class="meta-item"><label>Generó</label>${d.generatedBy}</div><div class="meta-item"><label>Conductor</label>${d.driver}</div></div>${stopsHtml}</body></html>`;
     const w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
   }
 }
@@ -883,58 +1852,557 @@ customElements.define('dispatch-detail-modal',DispatchDetailModal);
 class DispatchFormModal extends HTMLElement {
   connectedCallback(){
     this.className='modal-overlay';
+    const d=this.dispatch, isEdit=!!d;
     const box=el('div',{class:'modal-box wide'});
-    box.innerHTML=`<h3 style="font-size:.97rem;font-weight:600;margin-bottom:.9rem">Nuevo Despacho</h3>`;
-    const r1=el('div',{class:'form-grid-2'});
-    r1.append(ffSelect('Origen','df-orig',App.data.locations.map(l=>({v:l.id,l:l.name}))),ffSelect('Destino','df-dest',App.data.locations.map(l=>({v:l.id,l:l.name}))));
-    box.append(r1);
+    box.innerHTML=`<h3 style="font-size:.97rem;font-weight:600;margin-bottom:.9rem">${isEdit?'Editar':'Nuevo'} Despacho</h3>`;
+
+    // Origin
+    const origF=ffSelect('Origen (punto de partida)','df-orig',App.data.locations.map(l=>({v:l.id,l:l.name})),d?.origin);
+    box.append(origF);
+
+    // Dates
     const r2=el('div',{class:'form-grid-2'});
-    r2.append(ffInput('Fecha y hora de inicio','df-start','datetime-local'),ffInput('Fecha y hora de fin','df-end','datetime-local'));
+    r2.append(ffInput('Fecha y hora de inicio','df-start','datetime-local',d?.dateStart||''),ffInput('Fecha y hora de fin','df-end','datetime-local',d?.dateEnd||''));
     box.append(r2);
-    box.append(ffInput('Conductor / Transportista','df-driver','text'));
+
+    // Driver & generated by
+    box.append(ffInput('Conductor / Transportista','df-driver','text',d?.driver||''));
     const genW=el('div',{class:'form-field'});
-    genW.append(el('label',{},[' Generado por']));
-    genW.append(el('input',{type:'text',value:App.user?.name||'',readonly:'',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text2)',fontSize:'.9rem'}}));
+    genW.append(el('label',{},['Generado por']));
+    genW.append(el('input',{type:'text',value:d?.generatedBy||App.user?.name||'',readonly:'',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text2)',fontSize:'.9rem'}}));
     box.append(genW);
-    box.append(el('div',{style:{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.45rem',fontWeight:'500'}},['Equipos']));
-    this.itemsEl=el('div',{style:{marginBottom:'.55rem'}});
-    const addItem=el('button',{style:{background:'transparent',border:'1px dashed var(--border)',borderRadius:'8px',color:'var(--text2)',padding:'.4rem',fontSize:'.81rem',width:'100%',marginBottom:'.75rem',cursor:'pointer'}},['+ Agregar equipo']);
-    addItem.onclick=()=>this.addRow();
-    box.append(this.itemsEl,addItem);
-    this.addRow();
+
+    // Stops section
+    box.append(el('div',{style:{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.5rem',fontWeight:'500',marginTop:'.25rem'}},['Paradas del viaje']));
+
+    // Alert panel
+    this.alertPanel=el('div',{style:{display:'none',background:'rgba(240,74,74,.1)',border:'1px solid rgba(240,74,74,.4)',borderRadius:'var(--radius)',padding:'.75rem .9rem',marginBottom:'.75rem',fontSize:'.82rem',lineHeight:'1.5'}});
+    box.append(this.alertPanel);
+
+    // Stops container
+    this.stopsEl=el('div');
+    box.append(this.stopsEl);
+
+    const addStopBtn=el('button',{style:{background:'transparent',border:'1px dashed var(--accent)',borderRadius:'8px',color:'var(--accent)',padding:'.45rem',fontSize:'.81rem',width:'100%',marginBottom:'.75rem',cursor:'pointer'}},['+ Agregar parada']);
+    addStopBtn.onclick=()=>this.addStop();
+    box.append(addStopBtn);
+
+    // Notes
     const notesW=el('div',{class:'form-field'});
-    notesW.append(el('label',{},[' Notas']));
-    notesW.append(el('textarea',{id:'df-notes',rows:'2',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem',resize:'vertical'}}));
+    notesW.append(el('label',{},['Notas']));
+    const notesTA=el('textarea',{id:'df-notes',rows:'2',style:{width:'100%',padding:'.6rem .8rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem',resize:'vertical'}});
+    if(d?.notes) notesTA.value=d.notes;
+    notesW.append(notesTA);
     box.append(notesW);
+
+    // Date change listeners
+    box.querySelector('#df-start').addEventListener('change',()=>this.validate());
+    box.querySelector('#df-end').addEventListener('change',()=>this.validate());
+
+    // Footer
     const footer=el('div',{class:'modal-footer'});
     const cancel=el('button',{class:'btn'},['Cancelar']);cancel.onclick=()=>this.remove();
-    const save=el('button',{class:'btn btn-primary'},['Guardar despacho']);
-    save.onclick=()=>{
-      const origin=parseInt(box.querySelector('#df-orig').value);
-      const destination=parseInt(box.querySelector('#df-dest').value);
-      const dateStart=box.querySelector('#df-start').value;
-      const dateEnd=box.querySelector('#df-end').value;
-      const driver=box.querySelector('#df-driver').value.trim();
-      const notes=box.querySelector('#df-notes').value.trim();
-      const items=[...this.itemsEl.querySelectorAll('.drow')].map(row=>({equipId:parseInt(row.querySelector('.eq-sel').value),qty:parseInt(row.querySelector('.eq-qty').value)||1})).filter(it=>it.equipId);
-      if(!dateStart||!dateEnd||!driver||!items.length){alert('Completá todos los campos requeridos y al menos un equipo.');return}
-      App.data.dispatches.push({id:++App.nextId.dispatch,origin,destination,dateStart,dateEnd,driver,generatedBy:App.user?.name||'',notes,items});
-      if(this.onSave)this.onSave();this.remove();
-    };
+    const save=el('button',{class:'btn btn-primary'},[isEdit?'Guardar cambios':'Guardar despacho']);
+    save.onclick=()=>this.save(box,d,isEdit);
     footer.append(cancel,save);box.append(footer);
-    this.onclick=e=>{if(e.target===this)this.remove()};this.append(box);
+
+    this.onclick=e=>{if(e.target===this)this.remove()};
+    this.append(box);
+    this._box=box;
+    this._editId=isEdit?d.id:null;
+
+    // Pre-populate stops or add first empty stop
+    if(isEdit&&d.stops?.length) d.stops.forEach(s=>this.addStop(s.locationId,s.items));
+    else this.addStop();
   }
-  addRow(){
-    const row=el('div',{class:'drow',style:{display:'flex',gap:'.35rem',alignItems:'center',marginBottom:'.35rem'}});
-    const sel=el('select',{class:'eq-sel',style:{flex:'1',minWidth:0,padding:'.5rem .6rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'.83rem'}});
-    App.data.equipment.forEach(e=>sel.append(el('option',{value:e.id},[`${e.name} (${e.category})`])));
-    const qty=el('input',{class:'eq-qty',type:'number',min:'1',value:'1',style:{width:'58px',padding:'.5rem .4rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',textAlign:'center',flexShrink:'0'}});
-    const rem=el('button',{style:{background:'transparent',border:'none',color:'var(--red)',fontSize:'1.1rem',padding:'.1rem .3rem',flexShrink:'0',lineHeight:'1',cursor:'pointer'}},['×']);
-    rem.onclick=()=>row.remove();
-    row.append(sel,qty,rem);this.itemsEl.append(row);
+
+  addStop(preLocId=null, preItems=null){
+    const stopIdx=this.stopsEl.children.length+1;
+    const wrap=el('div',{style:{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'.75rem',marginBottom:'.6rem'}});
+
+    // Stop header
+    const stopHeader=el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem'}});
+    const stopLabel=el('div',{style:{fontSize:'.78rem',fontWeight:'600',color:'var(--accent)'}},['Parada '+stopIdx]);
+    const remStop=el('button',{style:{background:'transparent',border:'none',color:'var(--red)',fontSize:'.85rem',cursor:'pointer',padding:'.1rem .3rem'}},['× Eliminar parada']);
+    remStop.onclick=()=>{wrap.remove();this.renumberStops();this.validate()};
+    stopHeader.append(stopLabel,remStop);
+    wrap.append(stopHeader);
+
+    // Destination select for this stop
+    const destW=el('div',{style:{marginBottom:'.5rem'}});
+    destW.append(el('label',{style:{display:'block',fontSize:'.78rem',color:'var(--text2)',marginBottom:'.25rem'}},['Destino']));
+    const destSel=el('select',{class:'stop-dest',style:{width:'100%',padding:'.5rem .65rem',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'.85rem'}});
+    App.data.locations.forEach(l=>{const o=el('option',{value:l.id},[l.name]);if(preLocId&&l.id===preLocId)o.selected=true;destSel.append(o)});
+    destSel.addEventListener('change',()=>this.validate());
+    destW.append(destSel);
+    wrap.append(destW);
+
+    // Equipment rows for this stop
+    wrap.append(el('div',{style:{fontSize:'.76rem',color:'var(--text2)',marginBottom:'.3rem'}},['Equipos para esta parada']));
+    const itemsEl=el('div',{class:'stop-items'});
+    wrap.append(itemsEl);
+    const addEqBtn=el('button',{style:{background:'transparent',border:'1px dashed var(--border)',borderRadius:'6px',color:'var(--text3)',padding:'.3rem .6rem',fontSize:'.78rem',cursor:'pointer',marginTop:'.1rem'}},['+ Equipo']);
+    addEqBtn.onclick=()=>this.addEquipRow(itemsEl);
+    wrap.append(addEqBtn);
+
+    this.stopsEl.append(wrap);
+
+    // Pre-populate equipment rows or add one empty
+    if(preItems?.length) preItems.forEach(it=>this.addEquipRow(itemsEl,it.equipId,it.qty));
+    else this.addEquipRow(itemsEl);
   }
+
+  addEquipRow(itemsEl, preEquipId=null, preQty=1){
+    const row=el('div',{class:'eq-row',style:{display:'flex',gap:'.3rem',alignItems:'center',marginBottom:'.3rem'}});
+    const sel=el('select',{class:'eq-sel',style:{flex:'1',minWidth:0,padding:'.4rem .5rem',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'7px',color:'var(--text)',fontSize:'.8rem'}});
+    App.data.equipment.forEach(e=>{const o=el('option',{value:e.id},[`${e.name} (${e.category})`]);if(preEquipId&&e.id===preEquipId)o.selected=true;sel.append(o)});
+    const qty=el('input',{class:'eq-qty',type:'number',min:'1',value:String(preQty),style:{width:'54px',padding:'.4rem .35rem',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'7px',color:'var(--text)',textAlign:'center',flexShrink:'0'}});
+    const rem=el('button',{style:{background:'transparent',border:'none',color:'var(--red)',fontSize:'1rem',padding:'.1rem .25rem',flexShrink:'0',lineHeight:'1',cursor:'pointer'}},['×']);
+    rem.onclick=()=>{row.remove();this.validate()};
+    sel.addEventListener('change',()=>this.validate());
+    qty.addEventListener('input',()=>this.validate());
+    row.append(sel,qty,rem);
+    itemsEl.append(row);
+  }
+
+  renumberStops(){
+    [...this.stopsEl.children].forEach((wrap,i)=>{
+      const lbl=wrap.querySelector('.stop-label');
+      if(lbl) lbl.textContent='Parada '+(i+1);
+      // update inline label too
+      const firstEl=wrap.querySelector('[style*="color:var(--accent)"]');
+      if(firstEl) firstEl.textContent='Parada '+(i+1);
+    });
+  }
+
+  getStops(){
+    return [...this.stopsEl.children].map(wrap=>{
+      const locationId=parseInt(wrap.querySelector('.stop-dest').value);
+      const rawItems=[...wrap.querySelectorAll('.eq-row')].map(row=>({
+        equipId:parseInt(row.querySelector('.eq-sel').value),
+        qty:parseInt(row.querySelector('.eq-qty').value)||0
+      })).filter(it=>it.equipId&&it.qty>0);
+      // Aggregate duplicates within stop
+      const map=new Map();
+      rawItems.forEach(it=>map.set(it.equipId,(map.get(it.equipId)||0)+it.qty));
+      const items=[...map.entries()].map(([equipId,qty])=>({equipId,qty}));
+      return {locationId,items};
+    }).filter(s=>s.items.length>0);
+  }
+
+  getAllItems(){
+    // Aggregate all items across all stops for availability checking
+    const map=new Map();
+    this.getStops().forEach(s=>s.items.forEach(it=>map.set(it.equipId,(map.get(it.equipId)||0)+it.qty)));
+    return [...map.entries()].map(([equipId,qty])=>({equipId,qty}));
+  }
+
+  validate(){
+    if(!this._box) return;
+    const dateStart=this._box.querySelector('#df-start').value;
+    const dateEnd=this._box.querySelector('#df-end').value;
+    if(!dateStart||!dateEnd||dateStart>=dateEnd){this.clearAlert();return}
+    const items=this.getAllItems();
+    if(!items.length){this.clearAlert();return}
+    const conflicts=this.checkConflicts(dateStart,dateEnd,items,this._editId);
+    if(conflicts.length) this.showConflicts(conflicts);
+    else this.clearAlert();
+  }
+
+  checkConflicts(dateStart,dateEnd,items,excludeId=null){
+    const issues=[];
+    items.forEach(it=>{
+      const eq=App.data.equipment.find(e=>e.id===it.equipId);
+      if(!eq) return;
+      if(it.qty>eq.quantity){issues.push({eq,requested:it.qty,available:eq.quantity,overlapping:[],overStock:true});return}
+      const overlapping=App.data.dispatches.filter(d=>d.id!==excludeId&&d.dateStart<dateEnd&&d.dateEnd>dateStart);
+      const busyQty=overlapping.flatMap(allItems).filter(x=>x.equipId===it.equipId).reduce((s,x)=>s+x.qty,0);
+      const available=eq.quantity-busyQty;
+      if(it.qty>available) issues.push({eq,requested:it.qty,available:Math.max(0,available),overlapping});
+    });
+    return issues;
+  }
+
+  save(box,d,isEdit){
+    const origin=parseInt(box.querySelector('#df-orig').value);
+    const dateStart=box.querySelector('#df-start').value;
+    const dateEnd=box.querySelector('#df-end').value;
+    const driver=box.querySelector('#df-driver').value.trim();
+    const notes=box.querySelector('#df-notes').value.trim();
+    const stops=this.getStops();
+    if(!dateStart||!dateEnd||!driver){this.showAlert('⚠️ Completá fecha, hora y conductor.');return}
+    if(dateStart>=dateEnd){this.showAlert('⚠️ La fecha de fin debe ser posterior a la de inicio.');return}
+    if(!stops.length){this.showAlert('⚠️ Agregá al menos una parada con equipo.');return}
+    const items=this.getAllItems();
+    const conflicts=this.checkConflicts(dateStart,dateEnd,items,this._editId);
+    if(conflicts.length){this.showConflicts(conflicts);return}
+    if(isEdit){d.origin=origin;d.stops=stops;d.dateStart=dateStart;d.dateEnd=dateEnd;d.driver=driver;d.notes=notes}
+    else App.data.dispatches.push({id:++App.nextId.dispatch,origin,stops,dateStart,dateEnd,driver,generatedBy:App.user?.name||'',notes});
+    if(this.onSave)this.onSave();this.remove();
+  }
+
+  showConflicts(conflicts){
+    const lines=conflicts.map(c=>{
+      if(c.overStock) return `<div style="margin-bottom:.4rem"><span style="font-weight:600;color:var(--red)">⛔ ${c.eq.name}</span>: solicitás <strong>${c.requested}</strong> pero el inventario total tiene <strong style="color:var(--red)">${c.available}</strong>.</div>`;
+      const info=c.overlapping.length?c.overlapping.map(d=>`${fmt(d.dateStart)}→${fmt(d.dateEnd)} (${routeLabel(d)})`).join('; '):'—';
+      return `<div style="margin-bottom:.4rem"><span style="font-weight:600;color:var(--red)">⚠️ ${c.eq.name}</span>: solicitás <strong>${c.requested}</strong>, disponible: <strong style="color:${c.available>0?'var(--amber)':'var(--red)'}">${c.available}</strong>.<div style="font-size:.74rem;color:var(--text3);margin-top:.15rem">En uso: ${info}</div></div>`;
+    }).join('');
+    this.alertPanel.innerHTML=`<div style="font-weight:600;margin-bottom:.45rem;color:var(--red)">Conflicto de disponibilidad</div>${lines}`;
+    this.alertPanel.style.display='block';
+  }
+  showAlert(msg){this.alertPanel.innerHTML=msg;this.alertPanel.style.display='block'}
+  clearAlert(){this.alertPanel.style.display='none';this.alertPanel.innerHTML=''}
 }
 customElements.define('dispatch-form-modal',DispatchFormModal);
+
+// ─── USERS VIEW (admin only) ─────────────────────────────────────────────────
+class UsersView extends HTMLElement {
+  connectedCallback(){this.render()}
+  render(){
+    if(!App.isAdmin()){App.navigate('map');return}
+    this.innerHTML='';
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>👥 Gestión de Usuarios</h2>`;
+    const addBtn=el('button',{class:'btn btn-primary',style:{fontSize:'.8rem',whiteSpace:'nowrap'}},['+ Nuevo usuario']);
+    addBtn.onclick=()=>App.navigate('admin-register');
+    header.append(addBtn);
+    this.append(header);
+
+    const grid=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:'.85rem',padding:'1.1rem 1.5rem'}});
+    App.data.users.forEach(u=>{
+      const c=App.roleColor(u.role);
+      const card=el('div',{style:{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'1rem',position:'relative',overflow:'hidden'}});
+      const bar=el('div',{style:{position:'absolute',top:0,left:0,width:'3px',height:'100%',background:c}});
+      const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}});
+      const info=el('div',{style:{paddingLeft:'7px',minWidth:0,flex:'1'}});
+      info.append(
+        el('div',{style:{fontWeight:'600',fontSize:'.92rem',marginBottom:'.25rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},[u.name]),
+        el('div',{style:{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.4rem'}},[`@${u.username}`])
+      );
+      info.append(badge(App.roleLabel(u.role),c));
+      const acts=el('div',{style:{display:'flex',gap:'.3rem',flexShrink:0,marginLeft:'.5rem'}});
+      // Don't allow editing yourself to prevent accidental lockout
+      if(u.id!==App.user.id){
+        const eb=el('button',{class:'btn',style:{padding:'.25rem .5rem',fontSize:'.78rem'}},['✏️']);
+        eb.onclick=()=>this.openForm(u);
+        const db=el('button',{class:'btn btn-danger',style:{padding:'.25rem .5rem',fontSize:'.78rem'}},['🗑️']);
+        db.onclick=()=>{if(confirm(`¿Eliminar usuario "${u.name}"?`)){App.data.users=App.data.users.filter(x=>x.id!==u.id);this.render()}};
+        acts.append(eb,db);
+      } else {
+        acts.append(el('span',{style:{fontSize:'.72rem',color:'var(--text3)',padding:'.3rem .4rem'}},['(vos)']));
+      }
+      top.append(info,acts);
+      card.append(bar,top);
+      grid.append(card);
+    });
+    this.append(grid);
+  }
+  openForm(u){const m=document.createElement('user-form-modal');m.userData=u;m.onSave=()=>this.render();document.body.append(m)}
+}
+customElements.define('users-view',UsersView);
+
+class UserFormModal extends HTMLElement {
+  connectedCallback(){
+    this.className='modal-overlay';
+    const u=this.userData, isEdit=!!u;
+    const box=el('div',{class:'modal-box',style:{maxWidth:'420px',maxHeight:'90svh',overflowY:'auto'}});
+    
+    box.innerHTML=`<h3 style="font-size:1rem;font-weight:600;margin-bottom:1rem">${isEdit?'Editar':'Nuevo'} Usuario</h3>`;
+
+    // Error panel
+    const errBox=el('div',{style:{display:'none',background:'rgba(240,74,74,.1)',border:'1px solid rgba(240,74,74,.4)',borderRadius:'var(--radius)',padding:'.65rem .75rem',marginBottom:'.75rem',fontSize:'.8rem',color:'var(--red)',lineHeight:'1.4'}});
+    box.append(errBox);
+    const showErr=(msg)=>{errBox.textContent=msg;errBox.style.display='block'};
+    const clearErr=()=>{errBox.style.display='none'};
+
+    // Name
+    const fnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    fnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Nombre']));
+    const fnIn=el('input',{id:'uf-fname',type:'text',placeholder:'Nombre',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'},value:u?.firstName||''});
+    fnWrap.append(fnIn);
+    box.append(fnWrap);
+
+    // Lastname
+    const lnWrap=el('div',{style:{marginBottom:'.65rem'}});
+    lnWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Apellido']));
+    const lnIn=el('input',{id:'uf-lname',type:'text',placeholder:'Apellido',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'},value:u?.lastName||''});
+    lnWrap.append(lnIn);
+    box.append(lnWrap);
+
+    // Phone
+    const phoneWrap=el('div',{style:{marginBottom:'.65rem'}});
+    phoneWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Teléfono']));
+    const phoneRow=el('div',{style:{display:'flex',gap:'.3rem',width:'100%'}});
+    const codeSel=el('select',{id:'uf-code',style:{width:'95px',flexShrink:'0',padding:'.6rem .4rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.8rem'}});
+    COUNTRY_CODES.forEach(c=>{
+      const opt=el('option',{value:c.code},[`${c.flag} ${c.code}`]);
+      if(u&&u.phone){
+        const phoneCode=u.phone.split(' ')[0];
+        if(c.code===phoneCode) opt.selected=true;
+      } else if(c.code==='+54') opt.selected=true;
+      codeSel.append(opt);
+    });
+    const phoneIn=el('input',{id:'uf-phone',type:'tel',placeholder:'Número',style:{flex:'1',minWidth:'0',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'},value:u?.phone?u.phone.split(' ')[1]:''});
+    phoneRow.append(codeSel,phoneIn);
+    phoneWrap.append(phoneRow);
+    box.append(phoneWrap);
+
+    // Email
+    const emailWrap=el('div',{style:{marginBottom:'.65rem'}});
+    emailWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Correo electrónico']));
+    const emailIn=el('input',{id:'uf-email',type:'email',placeholder:'ejemplo@correo.com',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'},value:u?.email||''});
+    emailWrap.append(emailIn);
+    box.append(emailWrap);
+
+    // Email confirm (only for new users)
+    if(!isEdit){
+      const email2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+      email2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar correo']));
+      const email2In=el('input',{id:'uf-email2',type:'email',placeholder:'Confirmá tu correo',style:{width:'100%',padding:'.6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+      email2Wrap.append(email2In);
+      box.append(email2Wrap);
+    }
+
+    // Password validation helpers
+    const validatePass=(pass)=>({
+      length:pass.length>=8,
+      lower:/[a-z]/.test(pass),
+      upper:/[A-Z]/.test(pass),
+      digit:/\d/.test(pass),
+      special:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass)
+    });
+
+    // Password field
+    const passWrap=el('div',{style:{marginBottom:'.65rem'}});
+    passWrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},[isEdit?'Nueva contraseña (dejá vacío para no cambiar)':'Contraseña']));
+    const passPw=el('div',{style:{position:'relative',marginBottom:'.35rem'}});
+    const passIn=el('input',{id:'uf-pass',type:'password',placeholder:isEdit?'Sin cambios':'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+    const passEye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+    const svgEye=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    passEye.innerHTML=svgEye; let passVis=false;
+    passEye.onclick=(e)=>{e.preventDefault();passVis=!passVis;passIn.type=passVis?'text':'password';passEye.innerHTML=passVis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;passEye.style.color=passVis?'var(--accent)':'var(--text3)'};
+    passPw.append(passIn,passEye);
+
+    // Strength requirements (only for new users)
+    if(!isEdit){
+      const reqList=el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.3rem',fontSize:'.72rem',color:'var(--text3)',marginBottom:'.4rem'}});
+      const mkReq=(text,id)=>{
+        const req=el('div',{id,style:{display:'flex',alignItems:'center',gap:'.3rem',padding:'.25rem'}});
+        req.append(el('span',{style:{fontSize:'.8rem'}},['○']),el('span',{},[text]));
+        return req;
+      };
+      const req8=mkReq('8+ caracteres','rq-len');
+      const reqLow=mkReq('Minúscula','rq-low');
+      const reqUp=mkReq('Mayúscula','rq-up');
+      const reqDig=mkReq('Número','rq-dig');
+      const reqSpe=mkReq('Carácter especial','rq-spe');
+      reqList.append(req8,reqLow,reqUp,reqDig,reqSpe);
+      passWrap.append(passPw,reqList);
+      
+      const updateReqs=()=>{
+        const v=validatePass(passIn.value);
+        document.getElementById('rq-len').style.color=v.length?'var(--green)':'var(--text3)';
+        document.getElementById('rq-len').querySelector('span').textContent=v.length?'✓':'○';
+        document.getElementById('rq-low').style.color=v.lower?'var(--green)':'var(--text3)';
+        document.getElementById('rq-low').querySelector('span').textContent=v.lower?'✓':'○';
+        document.getElementById('rq-up').style.color=v.upper?'var(--green)':'var(--text3)';
+        document.getElementById('rq-up').querySelector('span').textContent=v.upper?'✓':'○';
+        document.getElementById('rq-dig').style.color=v.digit?'var(--green)':'var(--text3)';
+        document.getElementById('rq-dig').querySelector('span').textContent=v.digit?'✓':'○';
+        document.getElementById('rq-spe').style.color=v.special?'var(--green)':'var(--text3)';
+        document.getElementById('rq-spe').querySelector('span').textContent=v.special?'✓':'○';
+      };
+      passIn.addEventListener('input',updateReqs);
+    } else {
+      passWrap.append(passPw);
+    }
+    box.append(passWrap);
+
+    // Confirm password (only for new users)
+    if(!isEdit){
+      const pass2Wrap=el('div',{style:{marginBottom:'.65rem'}});
+      pass2Wrap.append(el('label',{style:{display:'block',fontSize:'.8rem',color:'var(--text2)',marginBottom:'.25rem'}},['Confirmar contraseña']));
+      const pass2Pw=el('div',{style:{position:'relative'}});
+      const pass2In=el('input',{id:'uf-pass2',type:'password',placeholder:'••••••••',style:{width:'100%',padding:'.6rem 2.5rem .6rem .75rem',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text)',fontSize:'.9rem'}});
+      const pass2Eye=el('button',{style:{position:'absolute',right:'0.5rem',top:'50%',transform:'translateY(-50%)',width:'2rem',height:'2rem',background:'transparent',border:'none',color:'var(--text3)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0'}});
+      pass2Eye.innerHTML=svgEye; let pass2Vis=false;
+      pass2Eye.onclick=(e)=>{e.preventDefault();pass2Vis=!pass2Vis;pass2In.type=pass2Vis?'text':'password';pass2Eye.innerHTML=pass2Vis?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/></svg>`:svgEye;pass2Eye.style.color=pass2Vis?'var(--accent)':'var(--text3)'};
+      pass2Pw.append(pass2In,pass2Eye);
+      pass2Wrap.append(pass2Pw);
+      box.append(pass2Wrap);
+    }
+
+    // Role
+    const roles=[
+      {v:'admin',   l:'Administrador'},
+      {v:'deposito',l:'Depósito'},
+      {v:'viewer',  l:'Viewer'},
+      {v:'driver',  l:'Transportista'}
+    ];
+    box.append(ffSelect('Perfil','uf-role',roles,u?.role||'viewer'));
+
+    // Footer
+    const footer=el('div',{class:'modal-footer'});
+    const cancel=el('button',{class:'btn'},['Cancelar']);
+    cancel.onclick=()=>this.remove();
+    
+    const save=el('button',{class:'btn btn-primary'},[isEdit?'Guardar cambios':'Crear usuario']);
+    save.onclick=()=>{
+      clearErr();
+      const firstName=box.querySelector('#uf-fname').value.trim();
+      const lastName=box.querySelector('#uf-lname').value.trim();
+      const countryCode=box.querySelector('#uf-code').value;
+      const phone=box.querySelector('#uf-phone').value.trim();
+      const email=box.querySelector('#uf-email').value.trim();
+      const pass=box.querySelector('#uf-pass').value;
+      const role=box.querySelector('#uf-role').value;
+
+      if(!firstName||!lastName){showErr('Nombre y apellido son obligatorios.');return}
+      if(!phone){showErr('Ingresá un número de teléfono.');return}
+      if(!/^\d{4,15}$/.test(phone.replace(/\s|-/g,''))){showErr('Número de teléfono inválido.');return}
+      if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showErr('Correo electrónico inválido.');return}
+
+      if(!isEdit){
+        // New user validations
+        const email2=box.querySelector('#uf-email2').value.trim();
+        if(email!==email2){showErr('Los correos electrónicos no coinciden.');return}
+        if(App.data.users.find(x=>x.username===email)){showErr('Ese correo ya está registrado.');return}
+        if(!pass){showErr('Ingresá una contraseña.');return}
+        const passVal=validatePass(pass);
+        if(!passVal.length){showErr('La contraseña debe tener al menos 8 caracteres.');return}
+        if(!passVal.lower){showErr('La contraseña debe incluir una letra minúscula.');return}
+        if(!passVal.upper){showErr('La contraseña debe incluir una letra mayúscula.');return}
+        if(!passVal.digit){showErr('La contraseña debe incluir un número.');return}
+        if(!passVal.special){showErr('La contraseña debe incluir un carácter especial (!@#$%^&*).');return}
+        const pass2=box.querySelector('#uf-pass2').value;
+        if(pass!==pass2){showErr('Las contraseñas no coinciden.');return}
+
+        // Create user
+        const name=`${firstName} ${lastName}`;
+        App.data.users.push({
+          id:++App.nextId.user,
+          name,
+          firstName,
+          lastName,
+          username:email,
+          email,
+          phone:`${countryCode} ${phone}`,
+          password:pass,
+          role
+        });
+      } else {
+        // Edit user
+        if(App.data.users.find(x=>x.username===email&&x.id!==u.id)){showErr('Ese correo ya está en uso.');return}
+        u.firstName=firstName;
+        u.lastName=lastName;
+        u.name=`${firstName} ${lastName}`;
+        u.email=email;
+        u.username=email;
+        u.phone=`${countryCode} ${phone}`;
+        u.role=role;
+        if(pass) u.password=pass;
+      }
+      if(this.onSave)this.onSave();
+      this.remove();
+    };
+    footer.append(cancel,save);
+    box.append(footer);
+    this.onclick=e=>{if(e.target===this)this.remove()};
+    this.append(box);
+  }
+}
+customElements.define('user-form-modal',UserFormModal);
+
+// ─── MY TRIPS VIEW (driver only) ─────────────────────────────────────────────
+class MyTripsView extends HTMLElement {
+  connectedCallback(){this.render()}
+  render(){
+    this.innerHTML='';
+    const header=el('div',{class:'view-header'});
+    header.innerHTML=`<h2>🚚 Mis Viajes</h2>`;
+    // Week range info
+    const now=new Date();
+    const weekEnd=new Date(now);weekEnd.setDate(weekEnd.getDate()+7);
+    const rangeLabel=el('div',{style:{fontSize:'.75rem',color:'var(--text3)',whiteSpace:'nowrap'}},
+      [`${now.toLocaleDateString('es-AR')} — ${weekEnd.toLocaleDateString('es-AR')}`]);
+    header.append(rangeLabel);
+    this.append(header);
+
+    const nowStr=now.toISOString().slice(0,16);
+    const weekEndStr=weekEnd.toISOString().slice(0,16);
+    const driverName=App.user.name;
+
+    // Filter dispatches: assigned to this driver AND overlap with next 7 days
+    const myDispatches=App.data.dispatches.filter(d=>
+      d.driver===driverName &&
+      d.dateStart<=weekEndStr && d.dateEnd>=nowStr
+    ).sort((a,b)=>a.dateStart.localeCompare(b.dateStart));
+
+    const list=el('div',{class:'dispatch-list'});
+
+    if(!myDispatches.length){
+      list.append(el('div',{style:{padding:'3rem',textAlign:'center',color:'var(--text3)',fontSize:'.9rem'}},
+        ['Sin viajes asignados en los próximos 7 días ✅']));
+      this.append(list);return;
+    }
+
+    myDispatches.forEach(d=>{
+      const orig=App.data.locations.find(l=>l.id===d.origin);
+      const isActive=d.dateStart<=nowStr&&d.dateEnd>=nowStr;
+      const isPast=d.dateEnd<nowStr;
+
+      const card=el('div',{class:'dispatch-card',style:{borderLeft:`3px solid ${isActive?'var(--green)':isPast?'var(--border)':'var(--accent)'}`}});
+
+      // Status + dates
+      const top=el('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'.55rem',gap:'.5rem'}});
+      const dateInfo=el('div',{style:{minWidth:0,flex:'1'}});
+      dateInfo.innerHTML=`<div style="font-weight:600;font-size:.9rem;margin-bottom:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${routeLabel(d)}</div><div style="font-size:.76rem;color:var(--text2)">${fmt(d.dateStart)} — ${fmt(d.dateEnd)}</div>`;
+      const sb=badge(isActive?'En curso':isPast?'Finalizado':'Próximo',isActive?'#22c87a':isPast?'#888':'#7c6af7');
+      sb.style.flexShrink='0';
+      top.append(dateInfo,sb);
+
+      // Stops timeline
+      const stopsWrap=el('div',{style:{marginBottom:'.5rem'}});
+      const allStops=[{locationId:d.origin,isOrigin:true},...(d.stops||[])];
+      allStops.forEach((s,i)=>{
+        const loc=App.data.locations.find(l=>l.id===s.locationId);
+        const stopRow=el('div',{style:{display:'flex',gap:'.55rem',alignItems:'flex-start',marginBottom:'.15rem'}});
+        const dotWrap=el('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',width:'16px',flexShrink:'0'}});
+        const dot=el('div',{style:{width:'10px',height:'10px',borderRadius:'50%',background:loc?.color||'#888',border:`2px solid ${loc?.color||'#888'}88`,marginTop:'3px',flexShrink:'0'}});
+        dotWrap.append(dot);
+        if(i<allStops.length-1){const ln=el('div',{style:{width:'2px',flex:'1',background:'var(--border2)',margin:'.15rem auto',minHeight:'14px'}});dotWrap.append(ln)}
+        const info=el('div',{style:{flex:'1',paddingBottom:'.25rem'}});
+        const lnm=el('div',{style:{fontSize:'.83rem',fontWeight:'500'}},[(s.isOrigin?'🚦 ':'📍 ')+(loc?.name||'?')]);
+        info.append(lnm);
+        if(!s.isOrigin&&s.items?.length){
+          const eq=el('div',{style:{fontSize:'.74rem',color:'var(--text2)',marginTop:'.1rem'}});
+          eq.textContent=s.items.map(it=>{const e=App.data.equipment.find(x=>x.id===it.equipId);return`${it.qty}× ${e?.name||'?'}`}).join(' · ');
+          info.append(eq);
+        }
+        stopRow.append(dotWrap,info);
+        stopsWrap.append(stopRow);
+      });
+
+      // Notes
+      const meta=el('div',{style:{fontSize:'.75rem',color:'var(--text3)',borderTop:'1px solid var(--border)',paddingTop:'.45rem',marginTop:'.1rem'}});
+      meta.textContent=d.notes?`📝 ${d.notes}`:'';
+
+      card.append(top,stopsWrap);
+      if(d.notes) card.append(meta);
+      list.append(card);
+    });
+
+    // Summary pills at top
+    const active=myDispatches.filter(d=>d.dateStart<=nowStr&&d.dateEnd>=nowStr).length;
+    const upcoming=myDispatches.filter(d=>d.dateStart>nowStr).length;
+    const summary=el('div',{style:{display:'flex',gap:'.6rem',padding:'.75rem 1.5rem 0',flexWrap:'wrap'}});
+    if(active) summary.append(badge(`${active} en curso`,'#22c87a'));
+    if(upcoming) summary.append(badge(`${upcoming} próximo(s)`,'#7c6af7'));
+    summary.append(el('span',{style:{fontSize:'.75rem',color:'var(--text3)',alignSelf:'center'}},[`${myDispatches.length} viaje(s) esta semana`]));
+    this.append(summary,list);
+  }
+}
+customElements.define('mytrips-view',MyTripsView);
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 document.body.append(document.createElement('app-root'));
